@@ -181,12 +181,7 @@ impl ShopBackend {
     }
 
     #[named]
-    pub async fn register_vehicle(
-        &self,
-        client_id: i32,
-        make: String,
-        model: String,
-    ) -> Result<()> {
+    pub async fn register_vehicle(&self, client_id: i32, make: &str, model: &str) -> Result<()> {
         self.login_check(function_name!());
         if matches!(self.user, User::Mechanic { .. }) {
             bail!(PermissionError)
@@ -197,7 +192,10 @@ impl ShopBackend {
                 Some(_) => bail!("client already has a car registered"),
                 None => {
                     let mut client: client::ActiveModel = client.into();
-                    client.car = Set(Some(Car { make, model }));
+                    client.car = Set(Some(Car {
+                        make: make.to_string(),
+                        model: model.to_string(),
+                    }));
                     self.db.update_client(client).await?;
                     Ok(())
                 }
