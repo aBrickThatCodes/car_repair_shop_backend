@@ -22,13 +22,13 @@ pub struct ShopBackend {
 }
 
 impl ShopBackend {
-    pub async fn init() -> Self {
-        let db = ShopDb::connect().await;
+    pub async fn init() -> Result<Self> {
+        let db = ShopDb::connect().await?;
 
-        ShopBackend {
+        Ok(ShopBackend {
             db,
             user: User::NotLoggedIn,
-        }
+        })
     }
 
     pub async fn client_login(&mut self, email: &str, password: &str) -> Result<User> {

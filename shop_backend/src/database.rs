@@ -17,17 +17,17 @@ pub struct ShopDb {
 
 impl ShopDb {
     /// Connect to the database or crash
-    pub async fn connect() -> Self {
-        let db = Database::connect(DATABASE_URL).await.unwrap();
+    pub async fn connect() -> Result<Self> {
+        let db = Database::connect(DATABASE_URL).await?;
 
-        Migrator::refresh(&db).await.unwrap();
+        Migrator::refresh(&db).await?;
 
-        let people_employed = Employee::find().all(&db).await.unwrap();
+        let people_employed = Employee::find().all(&db).await?;
         if people_employed.is_empty() {
-            add_basic_employees(&db).await.unwrap();
+            add_basic_employees(&db).await?;
         }
 
-        ShopDb { db }
+        Ok(ShopDb { db })
     }
 
     pub async fn get_client_by_id(&self, id: i32) -> Result<Option<client::Model>> {
