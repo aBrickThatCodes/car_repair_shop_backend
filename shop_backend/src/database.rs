@@ -1,10 +1,11 @@
+use crate::entities::employee::Role;
 use crate::entities::prelude::Order;
 use crate::entities::{prelude::*, *};
 use crate::migrator::Migrator;
 
 use anyhow::Result;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Database, DatabaseConnection, EntityTrait, QueryFilter,
+    ActiveModelTrait, ColumnTrait, Database, DatabaseConnection, EntityTrait, QueryFilter, Set,
 };
 use sea_orm_migration::prelude::*;
 
@@ -18,7 +19,27 @@ impl ShopDb {
     /// Connect to the database or crash
     pub async fn connect() -> Self {
         let db = Database::connect(DATABASE_URL).await.unwrap();
+
         Migrator::refresh(&db).await.unwrap();
+
+        let people_employed = Employee::find().all(&db).await.unwrap();
+        if people_employed.is_empty() {
+            let basic_technician = employee::ActiveModel {
+                id: Set(1),
+                password: Set(String::from("password")),
+                name: Set(String::from("Placeholder")),
+                role: Set(Role::Technician),
+            };
+            basic_technician.insert(&db).await.unwrap();
+            let basic_technician = employee::ActiveModel {
+                id: Set(2),
+                password: Set(String::from("password")),
+                name: Set(String::from("Placeholder")),
+                role: Set(Role::Mechanic),
+            };
+            basic_technician.insert(&db).await.unwrap();
+        }
+
         ShopDb { db }
     }
 
