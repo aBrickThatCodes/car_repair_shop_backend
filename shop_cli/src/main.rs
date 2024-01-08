@@ -1,8 +1,9 @@
-use anyhow::Result;
 use shop_backend::ShopBackend;
 
-#[async_std::main]
-async fn main() -> Result<()> {
-    let _ = ShopBackend::init().await;
+use anyhow::Result;
+use async_std::task::block_on;
+
+fn main() -> Result<()> {
+    let _ = block_on(ShopBackend::init());
     Ok(())
 }

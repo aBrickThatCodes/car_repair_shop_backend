@@ -31,9 +31,9 @@ impl std::fmt::Display for LoginError {
 }
 
 #[derive(Debug, Error)]
-pub struct RegisterError;
+pub struct RegisterClientError;
 
-impl std::fmt::Display for RegisterError {
+impl std::fmt::Display for RegisterClientError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("email already registered")
     }

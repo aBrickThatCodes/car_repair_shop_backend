@@ -1,12 +1,12 @@
+use crate::entities::prelude::Order;
+use crate::entities::{prelude::*, *};
+use crate::migrator::Migrator;
+
 use anyhow::Result;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Database, DatabaseConnection, EntityTrait, QueryFilter,
 };
 use sea_orm_migration::prelude::*;
-
-use crate::entities::prelude::Order;
-use crate::entities::{prelude::*, *};
-use crate::migrator::Migrator;
 
 const DATABASE_URL: &str = "sqlite:./database.db?mode=rwc";
 

@@ -14,6 +14,7 @@ pub enum Employee {
     Table,
     Id,
     Password,
+    Name,
     Role,
 }
 
@@ -42,6 +43,7 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(ColumnDef::new(Employee::Password).string().not_null())
+                    .col(ColumnDef::new(Employee::Name).string().not_null())
                     .col(
                         ColumnDef::new(Employee::Role)
                             .enumeration(Role::Table, Role::iter().skip(1))
