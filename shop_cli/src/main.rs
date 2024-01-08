@@ -1,4 +1,4 @@
-use shop_backend::ShopBackend;
+use shop_backend::*;
 
 use anyhow::Result;
 use async_std::task::block_on;
