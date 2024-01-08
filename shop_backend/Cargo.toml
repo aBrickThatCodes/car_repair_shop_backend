@@ -9,6 +9,8 @@ edition = "2021"
 anyhow = "1.0.79"
 async-std = { version = "1.12.0", features = ["attributes", "tokio1"] }
 function_name = "0.3.0"
+once_cell = "1.19.0"
+regex = { version = "1.10.2", features = ["use_std"] }
 sea-orm = { version = "0.12.10", features = [
     "sqlx-sqlite",
     "runtime-tokio-native-tls",

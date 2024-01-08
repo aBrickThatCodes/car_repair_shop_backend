@@ -2248,6 +2248,8 @@ dependencies = [
  "anyhow",
  "async-std",
  "function_name",
+ "once_cell",
+ "regex",
  "sea-orm",
  "sea-orm-migration",
  "serde",

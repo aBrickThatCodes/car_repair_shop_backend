@@ -1,13 +1,7 @@
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub struct DbError(String);
-
-impl DbError {
-    pub fn new(error: String) -> Self {
-        DbError(error)
-    }
-}
+pub struct DbError(pub String);
 
 impl std::fmt::Display for DbError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -16,13 +10,7 @@ impl std::fmt::Display for DbError {
 }
 
 #[derive(Debug, Error)]
-pub struct LoginError(String);
-
-impl LoginError {
-    pub fn new(error: String) -> Self {
-        LoginError(error)
-    }
-}
+pub struct LoginError(pub String);
 
 impl std::fmt::Display for LoginError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -31,11 +19,21 @@ impl std::fmt::Display for LoginError {
 }
 
 #[derive(Debug, Error)]
-pub struct RegisterClientError;
+pub enum RegisterClientError {
+    EmailAlreadyRegistered(String),
+    EmailIncorrectFormat(String),
+}
 
 impl std::fmt::Display for RegisterClientError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("email already registered")
+        match self {
+            RegisterClientError::EmailAlreadyRegistered(email) => {
+                write!(f, "email {email} already registered")
+            }
+            RegisterClientError::EmailIncorrectFormat(email) => {
+                write!(f, "{email} is not a correct email address")
+            }
+        }
     }
 }
 

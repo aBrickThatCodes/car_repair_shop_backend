@@ -14,6 +14,8 @@ use entities::{order, report};
 
 use anyhow::{anyhow, bail, Result};
 use function_name::named;
+use once_cell::sync::Lazy;
+use regex::Regex;
 use sea_orm::Set;
 
 pub struct ShopBackend {
@@ -36,7 +38,7 @@ impl ShopBackend {
         match self.db.get_client_by_email(email).await? {
             Some(client) => {
                 if client.password != password {
-                    bail!(anyhow!(LoginError::new(format!(
+                    bail!(anyhow!(LoginError(format!(
                         "incorrect password for {email}"
                     ))));
                 }
@@ -47,7 +49,7 @@ impl ShopBackend {
                 };
                 Ok(self.user.clone())
             }
-            None => bail!(DbError::new(format!("no user with email {email}"))),
+            None => bail!(DbError(format!("no user with email {email}"))),
         }
     }
 
@@ -56,7 +58,7 @@ impl ShopBackend {
         match self.db.get_employee_by_id(id).await? {
             Some(employee) => {
                 if employee.password != password {
-                    bail!(anyhow!(LoginError::new(format!(
+                    bail!(anyhow!(LoginError(format!(
                         "incorrect password for employee {id}"
                     ))));
                 }
@@ -78,7 +80,7 @@ impl ShopBackend {
 
                 Ok(self.user.clone())
             }
-            None => bail!(DbError::new(format!("employee {id} does not exist"))),
+            None => bail!(DbError(format!("employee {id} does not exist"))),
         }
     }
 
@@ -96,8 +98,17 @@ impl ShopBackend {
             "cannot register a client if already logged in"
         );
 
-        if self.db.get_client_by_email(email).await?.is_none() {
-            bail!(RegisterClientError);
+        static EMAIL_REGEX: Lazy<Regex> =
+            Lazy::new(|| Regex::new(r"^[\w\-\.]+@([\w-]+\.)+[\w-]{2,}$").unwrap());
+
+        if !EMAIL_REGEX.is_match(email) {
+            bail!(RegisterClientError::EmailIncorrectFormat(email.to_string()));
+        }
+
+        if self.db.get_client_by_email(email).await?.is_some() {
+            bail!(RegisterClientError::EmailAlreadyRegistered(
+                email.to_string()
+            ));
         }
 
         let client = client::ActiveModel {
@@ -191,9 +202,7 @@ impl ShopBackend {
                     Ok(())
                 }
             },
-            None => bail!(DbError::new(String::from(
-                "client {client_id} does not exits"
-            ))),
+            None => bail!(DbError(String::from("client {client_id} does not exits"))),
         }
     }
 
@@ -265,9 +274,7 @@ impl ShopBackend {
                     }
                     _ => bail!("service to be performed was not inspection"),
                 },
-                None => bail!(DbError::new(String::from(
-                    "order {order_id} does not exist"
-                ))),
+                None => bail!(DbError(String::from("order {order_id} does not exist"))),
             }
         } else {
             bail!(PermissionError);
@@ -293,9 +300,7 @@ impl ShopBackend {
                     self.db.register_report(report).await?;
                     Ok(())
                 }
-                None => bail!(DbError::new(String::from(
-                    "order {order_id} does not exist"
-                ))),
+                None => bail!(DbError(String::from("order {order_id} does not exist"))),
             },
             _ => bail!(""),
         }
@@ -311,7 +316,7 @@ impl ShopBackend {
                     let order = self.db.get_order_by_id(order_id).await?.unwrap();
                     Ok(format!("{report:#?}\n{order:#?}"))
                 }
-                None => bail!(DbError::new(format!("report {report_id} does not exist"))),
+                None => bail!(DbError(format!("report {report_id} does not exist"))),
             },
             _ => bail!(PermissionError),
         }
