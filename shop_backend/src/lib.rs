@@ -2,9 +2,11 @@ mod database;
 mod entities;
 mod errors;
 mod migrator;
+mod user;
 
 pub use entities::order::Service;
 pub use errors::*;
+pub use user::User;
 
 use database::ShopDb;
 use entities::client::{self, Car};
@@ -13,24 +15,6 @@ use entities::{order, report};
 use anyhow::{anyhow, bail, Result};
 use function_name::named;
 use sea_orm::Set;
-
-#[derive(Clone)]
-pub enum User {
-    Client {
-        id: i32,
-        email: String,
-        name: String,
-    },
-    Technician {
-        id: i32,
-        name: String,
-    },
-    Mechanic {
-        id: i32,
-        name: String,
-    },
-    NotLoggedIn,
-}
 
 pub struct ShopBackend {
     db: ShopDb,
