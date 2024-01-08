@@ -20,15 +20,11 @@ impl std::fmt::Debug for Model {
             .field("id", &self.id)
             .field("client_id", &self.client_id)
             .field("order_id", &self.order_id)
-            .field("cost", &Cost(self.cost))
+            .field(
+                "cost",
+                &format!("{}.{} PLN", self.cost / 100, self.cost % 100),
+            )
             .finish()
-    }
-}
-
-struct Cost(pub i32);
-impl fmt::Debug for Cost {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.{} PLN", self.0 / 100, self.0 % 100)
     }
 }
 
