@@ -1,0 +1,8 @@
+[workspace]
+
+resolver = "2"
+
+members = ["shop_backend", "shop_cli"]
+
+[workspace.dependencies]
+shop_backend = { path = "shop_backend" }
