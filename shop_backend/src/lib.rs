@@ -230,7 +230,7 @@ impl ShopBackend {
     }
 
     #[named]
-    pub async fn create_order(&self, client_id: i32, service: Service) -> Result<()> {
+    pub async fn register_order(&self, client_id: i32, service: Service) -> Result<()> {
         self.login_check(function_name!())?;
         if matches!(self.user, User::Mechanic { .. }) {
             bail!(PermissionError);
