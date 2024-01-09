@@ -177,12 +177,7 @@ impl ShopBackend {
     }
 
     #[named]
-    pub async fn register_vehicle(
-        &self,
-        client_id: i32,
-        make: String,
-        model: String,
-    ) -> Result<()> {
+    pub async fn register_car(&self, client_id: i32, make: String, model: String) -> Result<()> {
         self.login_check(function_name!())?;
         if matches!(self.user, User::Mechanic { .. }) {
             bail!(PermissionError)
