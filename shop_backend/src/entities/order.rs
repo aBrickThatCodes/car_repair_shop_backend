@@ -21,6 +21,15 @@ pub enum Service {
     Inspection,
 }
 
+impl std::fmt::Display for Service {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Service::Repair => "Repair",
+            Service::Inspection => "Inspection",
+        })
+    }
+}
+
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
