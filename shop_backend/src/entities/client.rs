@@ -22,7 +22,7 @@ pub struct Car {
 
 impl std::fmt::Display for Car {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {}", self.make, self.model)
+        write!(f, "Car: {} {}", self.make, self.model)
     }
 }
 

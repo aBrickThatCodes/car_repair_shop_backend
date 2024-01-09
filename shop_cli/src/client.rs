@@ -45,7 +45,10 @@ pub async fn client_loop(term: &Term, mut backend: ShopBackend) -> Result<()> {
                 2 => list_orders(term, &mut backend).await?,
                 3 => list_reports(term, &mut backend).await?,
                 4 => print_summary(term, &mut backend).await?,
-                5 => break,
+                5 => {
+                    backend.log_out().await;
+                    break;
+                }
                 _ => unreachable!(),
             }
         }
@@ -54,6 +57,7 @@ pub async fn client_loop(term: &Term, mut backend: ShopBackend) -> Result<()> {
 
 async fn login_screen(term: &Term, backend: &mut ShopBackend) -> Result<User> {
     loop {
+        term.clear_screen()?;
         term.write_line("Car Repair Shop Client Interface")?;
 
         let choice = Select::new()
@@ -106,6 +110,7 @@ async fn register_car(
         Some(_) => term.write_line("You already have registered a car")?,
 
         None => {
+            term.write_line("Register car")?;
             let make: String = Input::new().with_prompt("Make").interact_text_on(term)?;
             let model: String = Input::new().with_prompt("Model").interact_text_on(term)?;
             backend.register_car(client_id, &make, &model).await?;
@@ -127,6 +132,7 @@ async fn create_order(
         Some(_) => {
             static SERVICES: [Service; 2] = [Service::Inspection, Service::Repair];
 
+            term.write_line("Create order")?;
             let service = Select::new()
                 .items(&SERVICES)
                 .item("Cancel")
@@ -191,36 +197,38 @@ async fn list_reports(term: &Term, backend: &mut ShopBackend) -> Result<()> {
 }
 
 async fn print_summary(term: &Term, backend: &mut ShopBackend) -> Result<()> {
-    loop {
+    let report_id = loop {
         term.write_line("Get report summary")?;
         let report_id: String = Input::new()
             .with_prompt("Report ID (or nothing to go back)")
             .default("-1".to_string())
             .interact_text_on(term)?;
-        let report_id = match report_id.parse::<i32>() {
-            Ok(i) => i,
+        match report_id.parse::<i32>() {
+            Ok(i) => break i,
             Err(e) => {
                 term.write_line(&format!("{e}"))?;
                 wait_for_continue(term)?;
                 continue;
             }
-        };
-
-        if report_id == -1 {
-            break Ok(());
         }
+    };
 
-        let summary = match backend.get_report_summary(report_id).await {
-            Ok(s) => s,
-            Err(e) => match e.downcast_ref::<DbError>() {
-                Some(DbError(s)) => {
-                    term.write_line(s)?;
-                    continue;
-                }
-                None => bail!(e),
-            },
-        };
-        term.write_line(&summary)?;
-        wait_for_continue(term)?;
+    if report_id == -1 {
+        return Ok(());
     }
+
+    let summary = match backend.get_report_summary(report_id).await {
+        Ok(s) => s,
+        Err(e) => match e.downcast_ref::<DbError>() {
+            Some(DbError(s)) => {
+                term.write_line(s)?;
+                wait_for_continue(term)?;
+                return Ok(());
+            }
+            None => bail!(e),
+        },
+    };
+    term.write_line(&summary)?;
+    wait_for_continue(term)?;
+    Ok(())
 }

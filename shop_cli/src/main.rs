@@ -4,7 +4,7 @@ use dialoguer::console::Term;
 
 use shop_backend::ShopBackend;
 
-use shop_cli::client::client_loop;
+use shop_cli::{client::client_loop, employee::employee_loop};
 
 #[derive(Parser)]
 #[command(author, about, long_about = None)]
@@ -31,10 +31,9 @@ async fn main() -> Result<()> {
     }
     let backend = ShopBackend::init().await?;
     let term = Term::stdout();
-    term.clear_screen()?;
     match cli.command {
         Commands::Client => client_loop(&term, backend).await?,
-        Commands::Employee => todo!(),
+        Commands::Employee => employee_loop(&term, backend).await?,
     }
     Ok(())
 }
