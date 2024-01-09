@@ -24,6 +24,8 @@ pub struct ShopBackend {
 }
 
 impl ShopBackend {
+    /// If SHOP_DATABASE_PATH environment variable exists, backend will use that database,
+    /// otherwise ./database.db is used
     pub async fn init() -> Result<Self> {
         let db = ShopDb::connect().await?;
 
