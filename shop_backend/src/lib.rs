@@ -84,6 +84,11 @@ impl ShopBackend {
         }
     }
 
+    pub async fn log_out(&mut self) -> User {
+        self.user = User::NotLoggedIn;
+        User::NotLoggedIn
+    }
+
     pub fn is_logged_in(&self) -> bool {
         !matches!(self.user, User::NotLoggedIn)
     }
