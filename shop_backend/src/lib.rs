@@ -169,15 +169,13 @@ impl ShopBackend {
     }
 
     #[named]
-    pub async fn get_car(&self) -> Result<Option<String>> {
+    pub async fn get_car(&self, client_id: i32) -> Result<Option<String>> {
         self.login_check(function_name!())?;
-        Ok(match self.user {
-            User::Client { id, .. } => match self.db.get_client_by_id(id).await? {
-                Some(client) => client.car.map(|car| format!("{:?}", car)),
-                None => unreachable!(),
-            },
-            _ => bail!(PermissionError),
-        })
+
+        match self.db.get_client_by_id(client_id).await? {
+            Some(client) => Ok(client.car.map(|car| format!("{car:?}"))),
+            None => unreachable!(),
+        }
     }
 
     #[named]
