@@ -16,13 +16,29 @@ impl std::fmt::Debug for Model {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Model")
             .field("id", &self.id)
-            .field("client_id", &self.client_id)
             .field("order_id", &self.order_id)
             .field(
                 "cost",
                 &format!("{}.{} PLN", self.cost / 100, self.cost % 100),
             )
             .finish()
+    }
+}
+
+impl std::fmt::Display for Model {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut report_string = format!("{:#?}", self);
+        report_string = report_string
+            .split('\n')
+            .filter(|s| {
+                let s = s.trim_start();
+                !(s.starts_with("client_id") || s.starts_with("order_id"))
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+            .replace('"', "");
+
+        f.write_str(&report_string)
     }
 }
 

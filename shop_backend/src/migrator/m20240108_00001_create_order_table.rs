@@ -52,14 +52,14 @@ impl MigrationTrait for Migration {
                             .to(Client::Table, Client::Id),
                     )
                     .col(
-                        ColumnDef::new(Order::Service)
-                            .enumeration(Service::Table, Service::iter().skip(1))
-                            .not_null(),
-                    )
-                    .col(
                         ColumnDef::new(Order::Finished)
                             .boolean()
                             .default(false)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(Order::Service)
+                            .enumeration(Service::Table, Service::iter().skip(1))
                             .not_null(),
                     )
                     .to_owned(),

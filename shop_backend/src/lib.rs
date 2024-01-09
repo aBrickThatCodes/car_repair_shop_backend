@@ -174,31 +174,24 @@ impl ShopBackend {
         self.login_check(function_name!())?;
 
         match self.db.get_client_by_id(client_id).await? {
-            Some(client) => Ok(client.car.map(|car| format!("{car:?}"))),
+            Some(client) => Ok(client.car.map(|car| format!("{car}"))),
             None => unreachable!(),
         }
     }
 
     #[named]
     pub async fn get_report_summary(&self, report_id: i32) -> Result<String> {
+        static ORDER_REPLACE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"").unwrap());
+
         self.login_check(function_name!())?;
         match self.user {
             User::Client { .. } => match self.db.get_report_by_id(report_id).await? {
                 Some(report) => {
                     let order_id = report.order_id;
                     let order = self.db.get_order_by_id(order_id).await?.unwrap();
-
-                    let mut report_string = format!("{order:#?}");
-                    report_string = report_string
-                        .split('\n')
-                        .filter(|s| {
-                            let s = s.trim_start();
-                            !(s.starts_with("client_id") || s.starts_with("order_id"))
-                        })
-                        .collect::<Vec<_>>()
-                        .join("\n");
-
-                    Ok(format!("{report_string}\n{order:#?}"))
+                    Ok(String::from(
+                        ORDER_REPLACE_REGEX.replace(&format!("{report}"), format!("{order:?}")),
+                    ))
                 }
                 None => bail!(DbError(format!("report {report_id} does not exist"))),
             },
