@@ -35,18 +35,18 @@ impl ShopBackend {
         })
     }
 
-    pub async fn client_login(&mut self, email: String, password: String) -> Result<User> {
+    pub async fn client_login(&mut self, email: &String, password: &String) -> Result<User> {
         assert!(!self.is_logged_in(), "already logged in");
-        match self.db.get_client_by_email(&email).await? {
+        match self.db.get_client_by_email(email).await? {
             Some(client) => {
-                if client.password != password {
+                if client.password != *password {
                     bail!(anyhow!(LoginError(format!(
                         "incorrect password for {email}"
                     ))));
                 }
                 self.user = User::Client {
                     id: client.id,
-                    email,
+                    email: email.clone(),
                     name: client.name,
                 };
                 Ok(self.user.clone())
@@ -55,11 +55,11 @@ impl ShopBackend {
         }
     }
 
-    pub async fn employee_login(&mut self, id: i32, password: String) -> Result<User> {
+    pub async fn employee_login(&mut self, id: i32, password: &String) -> Result<User> {
         assert!(!self.is_logged_in(), "already logged in");
         match self.db.get_employee_by_id(id).await? {
             Some(employee) => {
-                if employee.password != password {
+                if employee.password != *password {
                     bail!(anyhow!(LoginError(format!(
                         "incorrect password for employee {id}"
                     ))));
@@ -101,9 +101,9 @@ impl ShopBackend {
 
     pub async fn register_user(
         &mut self,
-        name: String,
-        email: String,
-        password: String,
+        name: &String,
+        email: &String,
+        password: &String,
     ) -> Result<User> {
         assert!(
             !self.is_logged_in(),
@@ -113,12 +113,14 @@ impl ShopBackend {
         static EMAIL_REGEX: Lazy<Regex> =
             Lazy::new(|| Regex::new(r"^[\w\-\.]+@([\w-]+\.)+[\w-]{2,}$").unwrap());
 
-        if !EMAIL_REGEX.is_match(&email) {
-            bail!(RegisterClientError::EmailIncorrectFormat(email));
+        if !EMAIL_REGEX.is_match(email) {
+            bail!(RegisterClientError::EmailIncorrectFormat(email.to_owned()));
         }
 
-        if self.db.get_client_by_email(&email).await?.is_some() {
-            bail!(RegisterClientError::EmailAlreadyRegistered(email));
+        if self.db.get_client_by_email(email).await?.is_some() {
+            bail!(RegisterClientError::EmailAlreadyRegistered(
+                email.to_owned()
+            ));
         }
 
         let client = client::ActiveModel {
@@ -128,11 +130,11 @@ impl ShopBackend {
             ..Default::default()
         };
         self.db.register_client(client).await?;
-        let client = self.db.get_client_by_email(&email).await?.unwrap();
+        let client = self.db.get_client_by_email(email).await?.unwrap();
         self.user = User::Client {
-            email,
+            email: email.to_owned(),
             id: client.id,
-            name,
+            name: name.to_owned(),
         };
         Ok(self.user.clone())
     }

@@ -11,5 +11,6 @@ async-std = { version = "1.12.0", features = ["attributes", "tokio1"] }
 clap = { version = "4.4.13", features = ["derive"] }
 dialoguer = { version = "0.11.0", features = ["password"] }
 dotenvy = "0.15.7"
+once_cell = "1.19.0"
 
 shop_backend = { workspace = true }
