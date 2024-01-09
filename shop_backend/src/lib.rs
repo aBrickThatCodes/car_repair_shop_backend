@@ -18,6 +18,9 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use sea_orm::Set;
 
+static EMAIL_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^[\w\-\.]+@([\w-]+\.)+[\w-]{2,}$").unwrap());
+
 pub struct ShopBackend {
     db: ShopDb,
     user: User,
@@ -37,6 +40,11 @@ impl ShopBackend {
 
     pub async fn client_login(&mut self, email: &String, password: &String) -> Result<User> {
         assert!(!self.is_logged_in(), "already logged in");
+
+        if !EMAIL_REGEX.is_match(email) {
+            bail!(RegisterClientError::EmailIncorrectFormat(email.to_owned()));
+        }
+
         match self.db.get_client_by_email(email).await? {
             Some(client) => {
                 if client.password != *password {
@@ -96,7 +104,7 @@ impl ShopBackend {
     }
 
     fn login_check(&self, func_name: &str) -> Result<()> {
-        if self.is_logged_in() {
+        if !self.is_logged_in() {
             bail!(NotLoggedInError::new(func_name.to_string()));
         }
         Ok(())
@@ -112,9 +120,6 @@ impl ShopBackend {
             !self.is_logged_in(),
             "cannot register a client if already logged in"
         );
-
-        static EMAIL_REGEX: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"^[\w\-\.]+@([\w-]+\.)+[\w-]{2,}$").unwrap());
 
         if !EMAIL_REGEX.is_match(email) {
             bail!(RegisterClientError::EmailIncorrectFormat(email.to_owned()));
@@ -143,6 +148,66 @@ impl ShopBackend {
     }
 
     #[named]
+    pub async fn register_car(&self, client_id: i32, make: String, model: String) -> Result<()> {
+        self.login_check(function_name!())?;
+        if matches!(self.user, User::Mechanic { .. }) {
+            bail!(PermissionError)
+        }
+
+        match self.db.get_client_by_id(client_id).await? {
+            Some(client) => match &client.car {
+                Some(_) => bail!("client already has a car registered"),
+                None => {
+                    let mut client: client::ActiveModel = client.into();
+                    client.car = Set(Some(Car { make, model }));
+                    self.db.update_client(client).await?;
+                    Ok(())
+                }
+            },
+            None => bail!(DbError::new(format!("client {client_id} does not exits"))),
+        }
+    }
+
+    #[named]
+    pub async fn get_car(&self) -> Result<Option<String>> {
+        self.login_check(function_name!())?;
+        Ok(match self.user {
+            User::Client { id, .. } => match self.db.get_client_by_id(id).await? {
+                Some(client) => client.car.map(|car| format!("{:?}", car)),
+                None => unreachable!(),
+            },
+            _ => bail!(PermissionError),
+        })
+    }
+
+    #[named]
+    pub async fn get_report_summary(&self, report_id: i32) -> Result<String> {
+        self.login_check(function_name!())?;
+        match self.user {
+            User::Client { .. } => match self.db.get_report_by_id(report_id).await? {
+                Some(report) => {
+                    let order_id = report.order_id;
+                    let order = self.db.get_order_by_id(order_id).await?.unwrap();
+
+                    let mut report_string = format!("{order:#?}");
+                    report_string = report_string
+                        .split('\n')
+                        .filter(|s| {
+                            let s = s.trim_start();
+                            !(s.starts_with("client_id") || s.starts_with("order_id"))
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n");
+
+                    Ok(format!("{report_string}\n{order:#?}"))
+                }
+                None => bail!(DbError::new(format!("report {report_id} does not exist"))),
+            },
+            _ => bail!(PermissionError),
+        }
+    }
+
+    #[named]
     pub async fn get_client_orders(&self) -> Result<Vec<String>> {
         self.login_check(function_name!())?;
         match self.user {
@@ -163,37 +228,6 @@ impl ShopBackend {
                 Ok(reps.into_iter().map(|r| format!("{r:?}")).collect())
             }
             _ => bail!("not logged in as a client"),
-        }
-    }
-
-    pub async fn get_standing_orders(&self) -> Result<Vec<String>> {
-        match self.user {
-            User::Mechanic { .. } => {
-                let orders = self.db.get_standing_orders().await?;
-                Ok(orders.into_iter().map(|r| format!("{r:?}")).collect())
-            }
-            _ => bail!(PermissionError),
-        }
-    }
-
-    #[named]
-    pub async fn register_car(&self, client_id: i32, make: String, model: String) -> Result<()> {
-        self.login_check(function_name!())?;
-        if matches!(self.user, User::Mechanic { .. }) {
-            bail!(PermissionError)
-        }
-
-        match self.db.get_client_by_id(client_id).await? {
-            Some(client) => match &client.car {
-                Some(_) => bail!("client already has a car registered"),
-                None => {
-                    let mut client: client::ActiveModel = client.into();
-                    client.car = Set(Some(Car { make, model }));
-                    self.db.update_client(client).await?;
-                    Ok(())
-                }
-            },
-            None => bail!(DbError::new(format!("client {client_id} does not exits"))),
         }
     }
 
@@ -219,6 +253,16 @@ impl ShopBackend {
                 Ok(())
             }
             None => bail!("client {client_id} has no car registered"),
+        }
+    }
+
+    pub async fn get_standing_orders(&self) -> Result<Vec<String>> {
+        match self.user {
+            User::Mechanic { .. } => {
+                let orders = self.db.get_standing_orders().await?;
+                Ok(orders.into_iter().map(|r| format!("{r:?}")).collect())
+            }
+            _ => bail!(PermissionError),
         }
     }
 
@@ -265,33 +309,6 @@ impl ShopBackend {
                 None => bail!(DbError::new(format!("order {order_id} does not exist"))),
             },
             _ => bail!(""),
-        }
-    }
-
-    #[named]
-    pub async fn get_report_summary(&self, report_id: i32) -> Result<String> {
-        self.login_check(function_name!())?;
-        match self.user {
-            User::Client { .. } => match self.db.get_report_by_id(report_id).await? {
-                Some(report) => {
-                    let order_id = report.order_id;
-                    let order = self.db.get_order_by_id(order_id).await?.unwrap();
-
-                    let mut report_string = format!("{order:#?}");
-                    report_string = report_string
-                        .split('\n')
-                        .filter(|s| {
-                            let s = s.trim_start();
-                            !(s.starts_with("client_id") || s.starts_with("order_id"))
-                        })
-                        .collect::<Vec<_>>()
-                        .join("\n");
-
-                    Ok(format!("{report_string}\n{order:#?}"))
-                }
-                None => bail!(DbError::new(format!("report {report_id} does not exist"))),
-            },
-            _ => bail!(PermissionError),
         }
     }
 }
