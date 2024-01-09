@@ -48,7 +48,7 @@ impl ShopBackend {
         match self.db.get_client_by_email(email).await? {
             Some(client) => {
                 if client.password != *password {
-                    bail!(anyhow!(LoginError::new(format!(
+                    bail!(anyhow!(LoginError(format!(
                         "incorrect password for {email}"
                     ))));
                 }
@@ -59,7 +59,7 @@ impl ShopBackend {
                 };
                 Ok(self.user.clone())
             }
-            None => bail!(DbError::new(format!("no user with email {email}"))),
+            None => bail!(DbError(format!("no user with email {email}"))),
         }
     }
 
@@ -68,9 +68,7 @@ impl ShopBackend {
         match self.db.get_employee_by_id(id).await? {
             Some(employee) => {
                 if employee.password != *password {
-                    bail!(LoginError::new(format!(
-                        "incorrect password for employee {id}"
-                    )));
+                    bail!(LoginError(format!("incorrect password for employee {id}")));
                 }
 
                 match employee.role {
@@ -90,7 +88,7 @@ impl ShopBackend {
 
                 Ok(self.user.clone())
             }
-            None => bail!(DbError::new(format!("employee {id} does not exist"))),
+            None => bail!(DbError(format!("employee {id} does not exist"))),
         }
     }
 
@@ -105,7 +103,7 @@ impl ShopBackend {
 
     fn login_check(&self, func_name: &str) -> Result<()> {
         if !self.is_logged_in() {
-            bail!(NotLoggedInError::new(func_name.to_string()));
+            bail!(NotLoggedInError(func_name.to_string()));
         }
         Ok(())
     }
@@ -148,7 +146,7 @@ impl ShopBackend {
     }
 
     #[named]
-    pub async fn register_car(&self, client_id: i32, make: String, model: String) -> Result<()> {
+    pub async fn register_car(&self, client_id: i32, make: &String, model: &String) -> Result<()> {
         self.login_check(function_name!())?;
         if matches!(self.user, User::Mechanic { .. }) {
             bail!(PermissionError)
@@ -159,12 +157,15 @@ impl ShopBackend {
                 Some(_) => bail!("client already has a car registered"),
                 None => {
                     let mut client: client::ActiveModel = client.into();
-                    client.car = Set(Some(Car { make, model }));
+                    client.car = Set(Some(Car {
+                        make: make.to_owned(),
+                        model: model.to_owned(),
+                    }));
                     self.db.update_client(client).await?;
                     Ok(())
                 }
             },
-            None => bail!(DbError::new(format!("client {client_id} does not exits"))),
+            None => bail!(DbError(format!("client {client_id} does not exits"))),
         }
     }
 
@@ -199,7 +200,7 @@ impl ShopBackend {
 
                     Ok(format!("{report_string}\n{order:#?}"))
                 }
-                None => bail!(DbError::new(format!("report {report_id} does not exist"))),
+                None => bail!(DbError(format!("report {report_id} does not exist"))),
             },
             _ => bail!(PermissionError),
         }
@@ -211,7 +212,10 @@ impl ShopBackend {
         match self.user {
             User::Client { id, .. } => {
                 let orders = self.db.get_clients_orders(id).await?;
-                Ok(orders.into_iter().map(|r| format!("{r:?}")).collect())
+                Ok(orders
+                    .into_iter()
+                    .map(|r| format!("{r:?}").replace("Model", "Order"))
+                    .collect())
             }
             _ => bail!("not logged in as a client"),
         }
@@ -223,28 +227,31 @@ impl ShopBackend {
         match self.user {
             User::Client { id, .. } => {
                 let reps = self.db.get_clients_reports(id).await?;
-                Ok(reps.into_iter().map(|r| format!("{r:?}")).collect())
+                Ok(reps
+                    .into_iter()
+                    .map(|r| format!("{r:?}").replace("Model", "Report"))
+                    .collect())
             }
             _ => bail!("not logged in as a client"),
         }
     }
 
     #[named]
-    pub async fn register_order(&self, client_id: i32, service: Service) -> Result<()> {
+    pub async fn register_order(&self, client_id: i32, service: &Service) -> Result<()> {
         self.login_check(function_name!())?;
         if matches!(self.user, User::Mechanic { .. }) {
             bail!(PermissionError);
         }
 
         let Some(client) = self.db.get_client_by_id(client_id).await? else {
-            bail!(DbError::new(format!("client {client_id} does not exits")));
+            bail!(DbError(format!("client {client_id} does not exits")));
         };
 
         match client.car {
             Some(_) => {
                 let order = order::ActiveModel {
                     client_id: Set(client_id),
-                    service: Set(service),
+                    service: Set(service.to_owned()),
                     ..Default::default()
                 };
                 self.db.register_order(order).await?;
@@ -258,7 +265,10 @@ impl ShopBackend {
         match self.user {
             User::Mechanic { .. } => {
                 let orders = self.db.get_standing_orders().await?;
-                Ok(orders.into_iter().map(|r| format!("{r:?}")).collect())
+                Ok(orders
+                    .into_iter()
+                    .map(|r| format!("{r:?}").replace("Model", "Order"))
+                    .collect())
             }
             _ => bail!(PermissionError),
         }
@@ -278,7 +288,7 @@ impl ShopBackend {
                     }
                     _ => bail!("service to be performed was not inspection"),
                 },
-                None => bail!(DbError::new(format!("order {order_id} does not exist"))),
+                None => bail!(DbError(format!("order {order_id} does not exist"))),
             }
         } else {
             bail!(PermissionError);
@@ -304,7 +314,7 @@ impl ShopBackend {
                     self.db.register_report(report).await?;
                     Ok(())
                 }
-                None => bail!(DbError::new(format!("order {order_id} does not exist"))),
+                None => bail!(DbError(format!("order {order_id} does not exist"))),
             },
             _ => bail!(""),
         }
