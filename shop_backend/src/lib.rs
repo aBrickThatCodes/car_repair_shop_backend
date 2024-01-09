@@ -286,7 +286,7 @@ impl ShopBackend {
     }
 
     #[named]
-    pub async fn create_report(&self, order_id: i32, cost: i32) -> Result<()> {
+    pub async fn register_report(&self, order_id: i32, cost: i32) -> Result<()> {
         self.login_check(function_name!())?;
         match self.user {
             User::Mechanic { .. } => match self.db.get_order_by_id(order_id).await? {
