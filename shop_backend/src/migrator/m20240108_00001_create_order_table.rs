@@ -23,8 +23,6 @@ pub enum Order {
 #[derive(Iden, EnumIter)]
 pub enum Service {
     Table,
-    #[iden = "Register"]
-    Register,
     #[iden = "Repair"]
     Repair,
     #[iden = "Inspection"]

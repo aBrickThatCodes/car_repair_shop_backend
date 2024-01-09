@@ -1,7 +1,13 @@
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub struct DbError(pub String);
+pub struct DbError(String);
+
+impl DbError {
+    pub fn new(msg: String) -> Self {
+        DbError(msg)
+    }
+}
 
 impl std::fmt::Display for DbError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -10,11 +16,17 @@ impl std::fmt::Display for DbError {
 }
 
 #[derive(Debug, Error)]
-pub struct LoginError(pub String);
+pub struct LoginError(String);
 
 impl std::fmt::Display for LoginError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{self:?}")
+    }
+}
+
+impl LoginError {
+    pub fn new(msg: String) -> Self {
+        LoginError(msg)
     }
 }
 
@@ -43,5 +55,20 @@ pub struct PermissionError;
 impl std::fmt::Display for PermissionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("permission denied")
+    }
+}
+
+#[derive(Debug, Error)]
+pub struct NotLoggedInError(String);
+
+impl NotLoggedInError {
+    pub fn new(func_name: String) -> Self {
+        NotLoggedInError(func_name)
+    }
+}
+
+impl std::fmt::Display for NotLoggedInError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} requires being logged in", self.0)
     }
 }

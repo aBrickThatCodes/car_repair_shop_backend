@@ -1,6 +1,6 @@
 use std::env;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Database, DatabaseConnection, EntityTrait, QueryFilter,
 };
@@ -10,8 +10,6 @@ use crate::entities::prelude::Order;
 use crate::entities::{prelude::*, *};
 use crate::migrator::Migrator;
 
-const DEFAULT_DATABASE_PATH: &str = "./database.db";
-
 pub struct ShopDb {
     db: DatabaseConnection,
 }
@@ -19,10 +17,13 @@ pub struct ShopDb {
 impl ShopDb {
     /// Connect to the database or crash
     pub async fn connect() -> Result<Self> {
-        let database_path =
-            env::var("SHOP_DATABASE_PATH").unwrap_or(DEFAULT_DATABASE_PATH.to_string());
+        let database_path = env::var("SHOP_DATABASE_PATH").unwrap_or(String::from("./database.db"));
         let database_url = format!("sqlite:{database_path}?mode=rwc");
         let db = Database::connect(database_url).await?;
+
+        if matches!(db, DatabaseConnection::Disconnected) {
+            bail!("database disconnected");
+        }
 
         Migrator::up(&db, None).await?;
 
@@ -59,7 +60,6 @@ impl ShopDb {
     }
 
     // order functions
-    /// Get all standing orders
     pub async fn get_standing_orders(&self) -> Result<Vec<order::Model>> {
         let v = Order::find()
             .filter(order::Column::Finished.eq(false))
