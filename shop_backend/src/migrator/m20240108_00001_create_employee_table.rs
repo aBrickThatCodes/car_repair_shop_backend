@@ -1,13 +1,10 @@
-use sea_orm::{EnumIter, Iterable};
+use sea_orm::{ActiveModelTrait, EnumIter, Iterable, Set};
 use sea_orm_migration::prelude::*;
 
-pub struct Migration;
+use crate::entities::employee;
 
-impl MigrationName for Migration {
-    fn name(&self) -> &str {
-        "m20240108_00001_create_employee_table"
-    }
-}
+#[derive(DeriveMigrationName)]
+pub struct Migration;
 
 #[derive(Iden)]
 pub enum Employee {
@@ -51,7 +48,28 @@ impl MigrationTrait for Migration {
                     )
                     .to_owned(),
             )
-            .await
+            .await?;
+        let db = manager.get_connection();
+
+        employee::ActiveModel {
+            id: Set(1),
+            password: Set(String::from("password")),
+            name: Set(String::from("Placeholder")),
+            role: Set(employee::Role::Technician),
+        }
+        .insert(db)
+        .await?;
+
+        employee::ActiveModel {
+            id: Set(2),
+            password: Set(String::from("password")),
+            name: Set(String::from("Placeholder")),
+            role: Set(employee::Role::Mechanic),
+        }
+        .insert(db)
+        .await?;
+
+        Ok(())
     }
 
     // Define how to rollback this migration: Drop the Chef table.

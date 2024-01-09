@@ -1,13 +1,12 @@
-use crate::entities::employee::Role;
+use anyhow::Result;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, Database, DatabaseConnection, EntityTrait, QueryFilter,
+};
+use sea_orm_migration::prelude::*;
+
 use crate::entities::prelude::Order;
 use crate::entities::{prelude::*, *};
 use crate::migrator::Migrator;
-
-use anyhow::Result;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Database, DatabaseConnection, EntityTrait, QueryFilter, Set,
-};
-use sea_orm_migration::prelude::*;
 
 const DATABASE_URL: &str = "sqlite:./database.db?mode=rwc";
 
@@ -20,12 +19,7 @@ impl ShopDb {
     pub async fn connect() -> Result<Self> {
         let db = Database::connect(DATABASE_URL).await?;
 
-        Migrator::refresh(&db).await?;
-
-        let people_employed = Employee::find().all(&db).await?;
-        if people_employed.is_empty() {
-            add_basic_employees(&db).await?;
-        }
+        Migrator::up(&db, None).await?;
 
         Ok(ShopDb { db })
     }
@@ -110,22 +104,4 @@ impl ShopDb {
         Report::insert(report).exec(&self.db).await?;
         Ok(())
     }
-}
-
-async fn add_basic_employees(db: &DatabaseConnection) -> Result<()> {
-    let basic_technician = employee::ActiveModel {
-        id: Set(1),
-        password: Set(String::from("password")),
-        name: Set(String::from("Placeholder")),
-        role: Set(Role::Technician),
-    };
-    basic_technician.insert(db).await.unwrap();
-    let basic_technician = employee::ActiveModel {
-        id: Set(2),
-        password: Set(String::from("password")),
-        name: Set(String::from("Placeholder")),
-        role: Set(Role::Mechanic),
-    };
-    basic_technician.insert(db).await?;
-    Ok(())
 }
