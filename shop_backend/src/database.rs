@@ -1,3 +1,5 @@
+use std::env;
+
 use anyhow::Result;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Database, DatabaseConnection, EntityTrait, QueryFilter,
@@ -8,7 +10,7 @@ use crate::entities::prelude::Order;
 use crate::entities::{prelude::*, *};
 use crate::migrator::Migrator;
 
-const DATABASE_URL: &str = "sqlite:./database.db?mode=rwc";
+const DEFAULT_DATABASE_PATH: &str = "./database.db";
 
 pub struct ShopDb {
     db: DatabaseConnection,
@@ -17,7 +19,10 @@ pub struct ShopDb {
 impl ShopDb {
     /// Connect to the database or crash
     pub async fn connect() -> Result<Self> {
-        let db = Database::connect(DATABASE_URL).await?;
+        let database_path =
+            env::var("SHOP_DATABASE_PATH").unwrap_or(DEFAULT_DATABASE_PATH.to_string());
+        let database_url = format!("sqlite:{database_path}?mode=rwc");
+        let db = Database::connect(database_url).await?;
 
         Migrator::up(&db, None).await?;
 
