@@ -35,9 +35,9 @@ impl ShopBackend {
         })
     }
 
-    pub async fn client_login(&mut self, email: &str, password: &str) -> Result<User> {
+    pub async fn client_login(&mut self, email: String, password: String) -> Result<User> {
         assert!(!self.is_logged_in(), "already logged in");
-        match self.db.get_client_by_email(email).await? {
+        match self.db.get_client_by_email(&email).await? {
             Some(client) => {
                 if client.password != password {
                     bail!(anyhow!(LoginError(format!(
@@ -46,7 +46,7 @@ impl ShopBackend {
                 }
                 self.user = User::Client {
                     id: client.id,
-                    email: email.to_string(),
+                    email,
                     name: client.name,
                 };
                 Ok(self.user.clone())
@@ -55,7 +55,7 @@ impl ShopBackend {
         }
     }
 
-    pub async fn employee_login(&mut self, id: i32, password: &str) -> Result<User> {
+    pub async fn employee_login(&mut self, id: i32, password: String) -> Result<User> {
         assert!(!self.is_logged_in(), "already logged in");
         match self.db.get_employee_by_id(id).await? {
             Some(employee) => {
@@ -69,13 +69,13 @@ impl ShopBackend {
                     entities::employee::Role::Technician => {
                         self.user = User::Technician {
                             id,
-                            name: String::new(),
+                            name: employee.name,
                         }
                     }
                     entities::employee::Role::Mechanic => {
                         self.user = User::Mechanic {
                             id,
-                            name: String::new(),
+                            name: employee.name,
                         }
                     }
                 }
@@ -99,7 +99,12 @@ impl ShopBackend {
         assert!(self.is_logged_in(), "{func_name} requires being logged in")
     }
 
-    pub async fn register_user(&mut self, name: &str, email: &str, password: &str) -> Result<User> {
+    pub async fn register_user(
+        &mut self,
+        name: String,
+        email: String,
+        password: String,
+    ) -> Result<User> {
         assert!(
             !self.is_logged_in(),
             "cannot register a client if already logged in"
@@ -108,14 +113,12 @@ impl ShopBackend {
         static EMAIL_REGEX: Lazy<Regex> =
             Lazy::new(|| Regex::new(r"^[\w\-\.]+@([\w-]+\.)+[\w-]{2,}$").unwrap());
 
-        if !EMAIL_REGEX.is_match(email) {
-            bail!(RegisterClientError::EmailIncorrectFormat(email.to_string()));
+        if !EMAIL_REGEX.is_match(&email) {
+            bail!(RegisterClientError::EmailIncorrectFormat(email));
         }
 
-        if self.db.get_client_by_email(email).await?.is_some() {
-            bail!(RegisterClientError::EmailAlreadyRegistered(
-                email.to_string()
-            ));
+        if self.db.get_client_by_email(&email).await?.is_some() {
+            bail!(RegisterClientError::EmailAlreadyRegistered(email));
         }
 
         let client = client::ActiveModel {
@@ -125,11 +128,11 @@ impl ShopBackend {
             ..Default::default()
         };
         self.db.register_client(client).await?;
-        let client = self.db.get_client_by_email(email).await?.unwrap();
+        let client = self.db.get_client_by_email(&email).await?.unwrap();
         self.user = User::Client {
-            email: email.to_string(),
+            email,
             id: client.id,
-            name: name.to_string(),
+            name,
         };
         Ok(self.user.clone())
     }
@@ -151,11 +154,7 @@ impl ShopBackend {
     pub async fn get_user_orders(&self) -> Result<Vec<String>> {
         self.login_check(function_name!());
         match &self.user {
-            User::Client {
-                email: _,
-                id: _,
-                name: _,
-            } => {
+            User::Client { .. } => {
                 let id = self.get_user_client_id().await?;
                 let orders = self.db.get_clients_orders(id).await?;
                 Ok(orders.into_iter().map(|r| format!("{r:?}")).collect())
@@ -188,7 +187,12 @@ impl ShopBackend {
     }
 
     #[named]
-    pub async fn register_vehicle(&self, client_id: i32, make: &str, model: &str) -> Result<()> {
+    pub async fn register_vehicle(
+        &self,
+        client_id: i32,
+        make: String,
+        model: String,
+    ) -> Result<()> {
         self.login_check(function_name!());
         if matches!(self.user, User::Mechanic { .. }) {
             bail!(PermissionError)
@@ -199,69 +203,37 @@ impl ShopBackend {
                 Some(_) => bail!("client already has a car registered"),
                 None => {
                     let mut client: client::ActiveModel = client.into();
-                    client.car = Set(Some(Car {
-                        make: make.to_string(),
-                        model: model.to_string(),
-                    }));
+                    client.car = Set(Some(Car { make, model }));
                     self.db.update_client(client).await?;
                     Ok(())
                 }
             },
-            None => bail!(DbError(String::from("client {client_id} does not exits"))),
+            None => bail!(DbError(format!("client {client_id} does not exits"))),
         }
     }
 
     #[named]
-    pub async fn client_create_order(&self, service: Service) -> Result<()> {
+    pub async fn create_order(&self, client_id: i32, service: Service) -> Result<()> {
         self.login_check(function_name!());
-
-        match self.user {
-            User::Client { id, .. } => {
-                let Some(client) = self.db.get_client_by_id(id).await? else {
-                    unreachable!()
-                };
-
-                match client.car {
-                    Some(_) => {
-                        let order = order::ActiveModel {
-                            client_id: Set(id),
-                            service: Set(service),
-                            ..Default::default()
-                        };
-                        self.db.register_order(order).await?;
-                        Ok(())
-                    }
-                    None => bail!("client {id} has no car registered"),
-                }
-            }
-            _ => bail!(PermissionError),
+        if matches!(self.user, User::Mechanic { .. }) {
+            bail!(PermissionError);
         }
-    }
 
-    #[named]
-    pub async fn technician_create_order(&self, client_id: i32, service: Service) -> Result<()> {
-        self.login_check(function_name!());
+        let Some(client) = self.db.get_client_by_id(client_id).await? else {
+            bail!(DbError(format!("client {client_id} does not exits")));
+        };
 
-        match self.user {
-            User::Technician { .. } => {
-                let Some(client) = self.db.get_client_by_id(client_id).await? else {
-                    unreachable!()
+        match client.car {
+            Some(_) => {
+                let order = order::ActiveModel {
+                    client_id: Set(client_id),
+                    service: Set(service),
+                    ..Default::default()
                 };
-
-                match client.car {
-                    Some(_) => {
-                        let order = order::ActiveModel {
-                            client_id: Set(client_id),
-                            service: Set(service),
-                            ..Default::default()
-                        };
-                        self.db.register_order(order).await?;
-                        Ok(())
-                    }
-                    None => bail!("client {client_id} has no car registered"),
-                }
+                self.db.register_order(order).await?;
+                Ok(())
             }
-            _ => bail!(PermissionError),
+            None => bail!("client {client_id} has no car registered"),
         }
     }
 
@@ -279,7 +251,7 @@ impl ShopBackend {
                     }
                     _ => bail!("service to be performed was not inspection"),
                 },
-                None => bail!(DbError(String::from("order {order_id} does not exist"))),
+                None => bail!(DbError(format!("order {order_id} does not exist"))),
             }
         } else {
             bail!(PermissionError);
@@ -305,7 +277,7 @@ impl ShopBackend {
                     self.db.register_report(report).await?;
                     Ok(())
                 }
-                None => bail!(DbError(String::from("order {order_id} does not exist"))),
+                None => bail!(DbError(format!("order {order_id} does not exist"))),
             },
             _ => bail!(""),
         }
