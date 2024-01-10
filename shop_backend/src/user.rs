@@ -6,6 +6,17 @@ pub enum UserType {
     NotLoggedIn,
 }
 
+impl std::fmt::Display for UserType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            UserType::Client => "Client",
+            UserType::Technician => "Technician",
+            UserType::Mechanic => "Mechanic",
+            UserType::NotLoggedIn => "Not logged in",
+        })
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct User {
     id: i32,
@@ -35,8 +46,8 @@ impl User {
         self.id
     }
 
-    pub fn name(&self) -> String {
-        self.name.clone()
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     pub fn user_type(&self) -> UserType {

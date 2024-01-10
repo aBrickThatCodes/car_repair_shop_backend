@@ -5,12 +5,12 @@ use console::Term;
 use dialoguer::*;
 use shop_backend::*;
 
-use crate::common::wait_for_continue;
+use crate::common::*;
 
 pub async fn client_loop(term: &Term, mut backend: ShopBackend) -> Result<()> {
     static CLIENT_OPTIONS: [&str; 6] = [
         "Register car",
-        "Create order",
+        "Register order",
         "List orders",
         "List reports",
         "Print report summary",
@@ -36,11 +36,11 @@ pub async fn client_loop(term: &Term, mut backend: ShopBackend) -> Result<()> {
             term.clear_screen()?;
 
             match choice {
-                0 => register_car(term, &mut backend, user.id(), car).await?,
-                1 => create_order(term, &mut backend, user.id(), car).await?,
-                2 => list_orders(term, &mut backend).await?,
-                3 => list_reports(term, &mut backend).await?,
-                4 => print_summary(term, &mut backend).await?,
+                0 => register_car(term, &backend, user.id(), car).await?,
+                1 => register_order(term, &backend, user.id(), car).await?,
+                2 => list_orders(term, &backend).await?,
+                3 => list_reports(term, &backend).await?,
+                4 => print_summary(term, &backend).await?,
                 5 => {
                     backend.log_out().await;
                     break;
@@ -69,13 +69,13 @@ async fn login_screen(term: &Term, backend: &mut ShopBackend) -> Result<User> {
 
         let name = if choice == 1 {
             term.write_line("Register")?;
-            Input::new().with_prompt("Name").interact_text()?
+            input(term, "Name")?
         } else {
             term.write_line("Login")?;
             String::new()
         };
 
-        let email: String = Input::new().with_prompt("Email").interact_text_on(term)?;
+        let email = input(term, "Email")?;
         let password = Password::new().with_prompt("Password").interact_on(term)?;
 
         let user = match choice {
@@ -98,7 +98,7 @@ async fn login_screen(term: &Term, backend: &mut ShopBackend) -> Result<User> {
 
 async fn register_car(
     term: &Term,
-    backend: &mut ShopBackend,
+    backend: &ShopBackend,
     client_id: i32,
     car: Option<String>,
 ) -> Result<()> {
@@ -107,8 +107,8 @@ async fn register_car(
 
         None => {
             term.write_line("Register car")?;
-            let make: String = Input::new().with_prompt("Make").interact_text_on(term)?;
-            let model: String = Input::new().with_prompt("Model").interact_text_on(term)?;
+            let make: String = input(term, "Make")?;
+            let model: String = input(term, "Model")?;
             backend.register_car(client_id, &make, &model).await?;
             term.write_line(&format!("{make} {model} registered"))?;
         }
@@ -118,9 +118,9 @@ async fn register_car(
     Ok(())
 }
 
-async fn create_order(
+async fn register_order(
     term: &Term,
-    backend: &mut ShopBackend,
+    backend: &ShopBackend,
     client_id: i32,
     car: Option<String>,
 ) -> Result<()> {
@@ -128,7 +128,7 @@ async fn create_order(
         Some(_) => {
             static SERVICES: [Service; 2] = [Service::Inspection, Service::Repair];
 
-            term.write_line("Create order")?;
+            term.write_line("Register order")?;
             let service = Select::new()
                 .items(&SERVICES)
                 .item("Cancel")
@@ -141,8 +141,10 @@ async fn create_order(
 
             let service = &SERVICES[service];
             backend.register_order(client_id, service).await?;
-            let service = format!("{service}").to_lowercase();
-            term.write_line(&format!("Order for {service} registered"))?;
+            term.write_line(&format!(
+                "Order for {} registered",
+                format!("{service}").to_lowercase()
+            ))?;
             wait_for_continue(term)?;
         }
         None => {
@@ -154,7 +156,7 @@ async fn create_order(
     Ok(())
 }
 
-async fn list_orders(term: &Term, backend: &mut ShopBackend) -> Result<()> {
+async fn list_orders(term: &Term, backend: &ShopBackend) -> Result<()> {
     {
         term.write_line("List orders")?;
         let orders = backend.get_client_orders().await?;
@@ -174,7 +176,7 @@ async fn list_orders(term: &Term, backend: &mut ShopBackend) -> Result<()> {
     }
 }
 
-async fn list_reports(term: &Term, backend: &mut ShopBackend) -> Result<()> {
+async fn list_reports(term: &Term, backend: &ShopBackend) -> Result<()> {
     term.write_line("List reports")?;
     let reports = backend.get_client_reports().await?;
 
@@ -192,7 +194,7 @@ async fn list_reports(term: &Term, backend: &mut ShopBackend) -> Result<()> {
     Ok(())
 }
 
-async fn print_summary(term: &Term, backend: &mut ShopBackend) -> Result<()> {
+async fn print_summary(term: &Term, backend: &ShopBackend) -> Result<()> {
     let report_id = loop {
         term.write_line("Get report summary")?;
         let report_id: String = Input::new()

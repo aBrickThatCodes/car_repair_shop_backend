@@ -60,11 +60,8 @@ impl ShopDb {
     }
 
     // order functions
-    pub async fn get_standing_orders(&self) -> Result<Vec<order::Model>> {
-        let v = Order::find()
-            .filter(order::Column::Finished.eq(false))
-            .all(&self.db)
-            .await?;
+    pub async fn get_orders(&self) -> Result<Vec<order::Model>> {
+        let v = Order::find().all(&self.db).await?;
         Ok(v)
     }
 

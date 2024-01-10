@@ -12,6 +12,12 @@ pub struct Model {
     pub finished: bool,
 }
 
+impl std::fmt::Display for Model {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&format!("{self:?}").replace("Model", "Order"))
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "service")]
 pub enum Service {

@@ -32,11 +32,12 @@ impl std::fmt::Display for Model {
             .split('\n')
             .filter(|s| {
                 let s = s.trim_start();
-                !(s.starts_with("client_id") || s.starts_with("order_id"))
+                !(s.starts_with("client_id"))
             })
             .collect::<Vec<_>>()
             .join("\n")
-            .replace('"', "");
+            .replace('"', "")
+            .replace("Model", "Report");
 
         f.write_str(&report_string)
     }

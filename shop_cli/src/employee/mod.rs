@@ -6,16 +6,18 @@ use console::Term;
 use dialoguer::*;
 use shop_backend::*;
 
-use crate::common::wait_for_continue;
+use crate::common::*;
+
+use self::{mechanic::mechanic_loop, technician::technician_loop};
 
 #[allow(clippy::never_loop)]
 pub async fn employee_loop(term: &Term, mut backend: ShopBackend) -> Result<()> {
     loop {
         let user = login_screen(term, &mut backend).await?;
-        term.write_line(&format!("{user:?}"))?;
+
         match &user.user_type() {
-            UserType::Technician => todo!("technician_loop"),
-            UserType::Mechanic => todo!("mechanic_loop"),
+            UserType::Technician => technician_loop(term, &mut backend, &user).await?,
+            UserType::Mechanic => mechanic_loop(term, &mut backend, &user).await?,
             _ => unreachable!(),
         }
     }
@@ -40,7 +42,7 @@ async fn login_screen(term: &Term, backend: &mut ShopBackend) -> Result<User> {
 
         term.write_line("Login")?;
 
-        let id: String = Input::new().with_prompt("ID").interact_text_on(term)?;
+        let id: String = input(term, "ID")?;
         let password = Password::new().with_prompt("Password").interact_on(term)?;
 
         let id = match id.parse::<i32>() {

@@ -10,7 +10,13 @@ impl std::fmt::Display for DbError {
 }
 
 #[derive(Debug, Error)]
-pub struct LoginError(pub String);
+pub struct LoginError(String);
+
+impl LoginError {
+    pub fn new(msg: &str) -> Self {
+        LoginError(msg.to_string())
+    }
+}
 
 impl std::fmt::Display for LoginError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -47,7 +53,13 @@ impl std::fmt::Display for PermissionError {
 }
 
 #[derive(Debug, Error)]
-pub struct NotLoggedInError(pub String);
+pub struct NotLoggedInError(String);
+
+impl NotLoggedInError {
+    pub fn new(msg: &str) -> Self {
+        NotLoggedInError(msg.to_string())
+    }
+}
 
 impl std::fmt::Display for NotLoggedInError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -21,6 +21,8 @@ use sea_orm::Set;
 static EMAIL_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^[\w\-\.]+@([\w-]+\.)+[\w-]{2,}$").unwrap());
 
+static FINISHED_REPLACE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r", finished: true").unwrap());
+
 pub struct ShopBackend {
     db: ShopDb,
     user: User,
@@ -48,7 +50,7 @@ impl ShopBackend {
         match self.db.get_client_by_email(email).await? {
             Some(client) => {
                 if client.password != *password {
-                    bail!(anyhow!(LoginError(format!(
+                    bail!(anyhow!(LoginError::new(&format!(
                         "incorrect password for {email}"
                     ))));
                 }
@@ -64,7 +66,9 @@ impl ShopBackend {
         match self.db.get_employee_by_id(id).await? {
             Some(employee) => {
                 if employee.password != *password {
-                    bail!(LoginError(format!("incorrect password for employee {id}")));
+                    bail!(LoginError::new(&format!(
+                        "incorrect password for employee {id}"
+                    )));
                 }
 
                 match employee.role {
@@ -94,7 +98,7 @@ impl ShopBackend {
 
     fn login_check(&self, func_name: &str) -> Result<()> {
         if !self.is_logged_in() {
-            bail!(NotLoggedInError(func_name.to_string()));
+            bail!(NotLoggedInError::new(func_name));
         }
         Ok(())
     }
@@ -168,7 +172,8 @@ impl ShopBackend {
 
     #[named]
     pub async fn get_report_summary(&self, report_id: i32) -> Result<String> {
-        static ORDER_REPLACE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"").unwrap());
+        static ORDER_REPLACE_REGEX: Lazy<Regex> =
+            Lazy::new(|| Regex::new(r"order_id: \d+").unwrap());
 
         self.login_check(function_name!())?;
         match self.user.user_type() {
@@ -177,7 +182,7 @@ impl ShopBackend {
                     let order_id = report.order_id;
                     let order = self.db.get_order_by_id(order_id).await?.unwrap();
                     Ok(String::from(
-                        ORDER_REPLACE_REGEX.replace(&format!("{report}"), format!("{order:?}")),
+                        ORDER_REPLACE_REGEX.replace(&format!("{report}"), format!("{order}")),
                     ))
                 }
                 None => bail!(DbError(format!("report {report_id} does not exist"))),
@@ -241,13 +246,38 @@ impl ShopBackend {
         }
     }
 
-    pub async fn get_standing_orders(&self) -> Result<Vec<String>> {
+    #[named]
+    pub async fn check_order_id(&self, order_id: i32) -> Result<()> {
+        self.login_check(function_name!())?;
+
+        match self.db.get_client_by_id(order_id).await? {
+            Some(_) => Ok(()),
+            None => bail!(DbError(format!("order {order_id} does not exits"))),
+        }
+    }
+
+    pub async fn get_unfinished_orders(&self) -> Result<Vec<String>> {
         match self.user.user_type() {
             UserType::Mechanic => {
-                let orders = self.db.get_standing_orders().await?;
+                let orders = self.db.get_orders().await?;
                 Ok(orders
-                    .into_iter()
-                    .map(|r| format!("{r:?}").replace("Model", "Order"))
+                    .iter()
+                    .filter(|m| !m.finished)
+                    .map(|s| String::from(FINISHED_REPLACE_REGEX.replace(&format!("{s:?}"), "")))
+                    .collect())
+            }
+            _ => bail!(PermissionError),
+        }
+    }
+
+    pub async fn get_finished_orders(&self) -> Result<Vec<String>> {
+        match self.user.user_type() {
+            UserType::Mechanic => {
+                let orders = self.db.get_orders().await?;
+                Ok(orders
+                    .iter()
+                    .filter(|m| m.finished)
+                    .map(|s| String::from(FINISHED_REPLACE_REGEX.replace(&format!("{s:?}"), "")))
                     .collect())
             }
             _ => bail!(PermissionError),
@@ -276,17 +306,31 @@ impl ShopBackend {
     }
 
     #[named]
-    pub async fn register_report(&self, order_id: i32, cost: i32) -> Result<()> {
+    pub async fn close_order(&self, order_id: i32) -> Result<()> {
         self.login_check(function_name!())?;
-        match self.user.user_type() {
-            UserType::Mechanic => match self.db.get_order_by_id(order_id).await? {
+        if let UserType::Mechanic = self.user.user_type() {
+            match self.db.get_order_by_id(order_id).await? {
                 Some(order) => {
                     let mut order: order::ActiveModel = order.into();
                     order.finished = Set(true);
-                    let client_id = order.clone().client_id.unwrap();
                     self.db.update_order(order).await?;
+                }
+                None => bail!(DbError(format!("order {order_id} does not exist"))),
+            }
+        } else {
+            bail!(PermissionError);
+        }
+        Ok(())
+    }
+
+    #[named]
+    pub async fn register_report(&self, order_id: i32, cost: i32) -> Result<()> {
+        self.login_check(function_name!())?;
+        match self.user.user_type() {
+            UserType::Technician => match self.db.get_order_by_id(order_id).await? {
+                Some(order) => {
                     let report = report::ActiveModel {
-                        client_id: Set(client_id),
+                        client_id: Set(order.client_id),
                         order_id: Set(order_id),
                         cost: Set(cost),
                         ..Default::default()
