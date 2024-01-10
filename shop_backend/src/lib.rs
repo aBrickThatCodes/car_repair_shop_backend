@@ -1,30 +1,33 @@
-mod database;
 mod entities;
 mod error;
 mod migrator;
 mod user;
 
-pub use entities::order::Service;
-pub use error::*;
-pub use user::*;
-
-use database::ShopDb;
-use entities::client::{self, Car};
-use entities::{order, report};
-
 use anyhow::{anyhow, bail, Result};
 use function_name::named;
 use once_cell::sync::Lazy;
 use regex::Regex;
-use sea_orm::Set;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, Database, DatabaseConnection, EntityTrait, ModelTrait,
+    QueryFilter, Set,
+};
+use sea_orm_migration::prelude::*;
+use serde_json::{self};
+
+use std::env;
+
+use entities::client::{self, Car};
+use entities::{order, order::Service, prelude::Order, prelude::*, report};
+pub use error::*;
+use migrator::Migrator;
+
+pub use user::*;
 
 static EMAIL_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^[\w\-\.]+@([\w-]+\.)+[\w-]{2,}$").unwrap());
 
-static FINISHED_REPLACE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r", finished: true").unwrap());
-
 pub struct ShopBackend {
-    db: ShopDb,
+    db: DatabaseConnection,
     user: User,
 }
 
@@ -32,12 +35,26 @@ impl ShopBackend {
     /// If SHOP_DATABASE_PATH environment variable exists, backend will use that database,
     /// otherwise ./database.db is used
     pub async fn init() -> Result<Self> {
-        let db = ShopDb::connect().await?;
+        let db = Self::connect().await?;
 
         Ok(ShopBackend {
             db,
             user: User::not_logged_in(),
         })
+    }
+
+    async fn connect() -> Result<DatabaseConnection> {
+        let database_path = env::var("SHOP_DATABASE_PATH").unwrap_or(String::from("./database.db"));
+        let database_url = format!("sqlite:{database_path}?mode=rwc");
+        let db = Database::connect(database_url).await?;
+
+        if matches!(db, DatabaseConnection::Disconnected) {
+            bail!("database disconnected");
+        }
+
+        Migrator::up(&db, None).await?;
+
+        Ok(db)
     }
 
     pub async fn client_login(&mut self, email: &str, password: &str) -> Result<User> {
@@ -47,7 +64,11 @@ impl ShopBackend {
             bail!(RegisterClientError::EmailIncorrectFormat(email.to_owned()));
         }
 
-        match self.db.get_client_by_email(email).await? {
+        match Client::find()
+            .filter(client::Column::Email.eq(email))
+            .one(&self.db)
+            .await?
+        {
             Some(client) => {
                 if client.password != *password {
                     bail!(anyhow!(LoginError::new(&format!(
@@ -63,7 +84,7 @@ impl ShopBackend {
 
     pub async fn employee_login(&mut self, id: i32, password: &str) -> Result<User> {
         assert!(!self.is_logged_in(), "already logged in");
-        match self.db.get_employee_by_id(id).await? {
+        match Employee::find_by_id(id).one(&self.db).await? {
             Some(employee) => {
                 if employee.password != *password {
                     bail!(LoginError::new(&format!(
@@ -118,7 +139,12 @@ impl ShopBackend {
             bail!(RegisterClientError::EmailIncorrectFormat(email.to_owned()));
         }
 
-        if self.db.get_client_by_email(email).await?.is_some() {
+        if Client::find()
+            .filter(client::Column::Email.eq(email))
+            .one(&self.db)
+            .await?
+            .is_some()
+        {
             bail!(RegisterClientError::EmailAlreadyRegistered(
                 email.to_owned()
             ));
@@ -130,9 +156,8 @@ impl ShopBackend {
             password: Set(password.to_owned()),
             ..Default::default()
         };
-        self.db.register_client(client).await?;
-        let client = self.db.get_client_by_email(email).await?.unwrap();
-        self.user = User::logged_in(client.id, name, UserType::Client);
+        let res = client.insert(&self.db).await?;
+        self.user = User::logged_in(res.id, name, UserType::Client);
         Ok(self.user.clone())
     }
 
@@ -143,7 +168,7 @@ impl ShopBackend {
             bail!(PermissionError)
         }
 
-        match self.db.get_client_by_id(client_id).await? {
+        match Client::find_by_id(client_id).one(&self.db).await? {
             Some(client) => match &client.car {
                 Some(_) => bail!("client already has a car registered"),
                 None => {
@@ -152,7 +177,7 @@ impl ShopBackend {
                         make: make.to_owned(),
                         model: model.to_owned(),
                     }));
-                    self.db.update_client(client).await?;
+                    client.update(&self.db).await?;
                     Ok(())
                 }
             },
@@ -164,31 +189,9 @@ impl ShopBackend {
     pub async fn get_car(&self, client_id: i32) -> Result<Option<String>> {
         self.login_check(function_name!())?;
 
-        match self.db.get_client_by_id(client_id).await? {
-            Some(client) => Ok(client.car.map(|car| format!("{car}"))),
+        match Client::find_by_id(client_id).one(&self.db).await? {
+            Some(client) => Ok(client.car.map(|car| serde_json::to_string(&car).unwrap())),
             None => unreachable!(),
-        }
-    }
-
-    #[named]
-    pub async fn get_report_summary(&self, report_id: i32) -> Result<String> {
-        static ORDER_REPLACE_REGEX: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"order_id: \d+").unwrap());
-
-        self.login_check(function_name!())?;
-        match self.user.user_type() {
-            UserType::Client { .. } => match self.db.get_report_by_id(report_id).await? {
-                Some(report) => {
-                    let order_id = report.order_id;
-                    let order = self.db.get_order_by_id(order_id).await?.unwrap();
-                    Ok(String::from(ORDER_REPLACE_REGEX.replace(
-                        &format!("{report}"),
-                        FINISHED_REPLACE_REGEX.replace(&format!("{order}"), ""),
-                    )))
-                }
-                None => bail!(DbError(format!("report {report_id} does not exist"))),
-            },
-            _ => bail!(PermissionError),
         }
     }
 
@@ -197,10 +200,14 @@ impl ShopBackend {
         self.login_check(function_name!())?;
         match self.user.user_type() {
             UserType::Client => {
-                let orders = self.db.get_clients_orders(self.user.id()).await?;
+                let client = Client::find_by_id(self.user.id())
+                    .one(&self.db)
+                    .await?
+                    .unwrap();
+                let orders = client.find_related(Order).all(&self.db).await?;
                 Ok(orders
-                    .into_iter()
-                    .map(|r| format!("{r:?}").replace("Model", "Order"))
+                    .iter()
+                    .map(|m| serde_json::to_string(m).unwrap())
                     .collect())
             }
             _ => bail!("not logged in as a client"),
@@ -212,10 +219,14 @@ impl ShopBackend {
         self.login_check(function_name!())?;
         match self.user.user_type() {
             UserType::Client => {
-                let reps = self.db.get_clients_reports(self.user.id()).await?;
+                let client = Client::find_by_id(self.user.id())
+                    .one(&self.db)
+                    .await?
+                    .unwrap();
+                let reps = client.find_related(Report).all(&self.db).await?;
                 Ok(reps
-                    .into_iter()
-                    .map(|r| format!("{r:?}").replace("Model", "Report"))
+                    .iter()
+                    .map(|m| serde_json::to_string(m).unwrap())
                     .collect())
             }
             _ => bail!("not logged in as a client"),
@@ -229,7 +240,7 @@ impl ShopBackend {
             bail!(PermissionError);
         }
 
-        let Some(client) = self.db.get_client_by_id(client_id).await? else {
+        let Some(client) = Client::find_by_id(client_id).one(&self.db).await? else {
             bail!(DbError(format!("client {client_id} does not exist")));
         };
 
@@ -240,31 +251,23 @@ impl ShopBackend {
                     service: Set(service.to_owned()),
                     ..Default::default()
                 };
-                self.db.register_order(order).await?;
+                order.insert(&self.db).await?;
                 Ok(())
             }
             None => bail!("client {client_id} has no car registered"),
         }
     }
 
-    #[named]
-    pub async fn check_order_id(&self, order_id: i32) -> Result<()> {
-        self.login_check(function_name!())?;
-
-        match self.db.get_client_by_id(order_id).await? {
-            Some(_) => Ok(()),
-            None => bail!(DbError(format!("order {order_id} does not exist"))),
-        }
-    }
-
     pub async fn get_unfinished_orders(&self) -> Result<Vec<String>> {
         match self.user.user_type() {
             UserType::Mechanic => {
-                let orders = self.db.get_orders().await?;
+                let orders = Order::find()
+                    .filter(order::Column::Finished.eq(false))
+                    .all(&self.db)
+                    .await?;
                 Ok(orders
                     .iter()
-                    .filter(|m| !m.finished)
-                    .map(|s| String::from(FINISHED_REPLACE_REGEX.replace(&format!("{s:?}"), "")))
+                    .map(|m: &order::Model| serde_json::to_string(m).unwrap())
                     .collect())
             }
             _ => bail!(PermissionError),
@@ -274,11 +277,13 @@ impl ShopBackend {
     pub async fn get_finished_orders(&self) -> Result<Vec<String>> {
         match self.user.user_type() {
             UserType::Technician => {
-                let orders = self.db.get_orders().await?;
+                let orders = Order::find()
+                    .filter(order::Column::Finished.eq(true))
+                    .all(&self.db)
+                    .await?;
                 Ok(orders
                     .iter()
-                    .filter(|m| m.finished)
-                    .map(|s| String::from(FINISHED_REPLACE_REGEX.replace(&format!("{s:?}"), "")))
+                    .map(|m| serde_json::to_string(m).unwrap())
                     .collect())
             }
             _ => bail!(PermissionError),
@@ -289,12 +294,12 @@ impl ShopBackend {
     pub async fn change_inspection_to_repair(&self, order_id: i32) -> Result<()> {
         self.login_check(function_name!())?;
         if let UserType::Mechanic = self.user.user_type() {
-            match self.db.get_order_by_id(order_id).await? {
+            match Order::find_by_id(order_id).one(&self.db).await? {
                 Some(order) => match &order.service {
                     order::Service::Inspection => {
                         let mut order: order::ActiveModel = order.into();
                         order.service = Set(order::Service::Repair);
-                        self.db.update_order(order).await?;
+                        order.update(&self.db).await?;
                         Ok(())
                     }
                     _ => bail!("service to be performed was not inspection"),
@@ -310,11 +315,11 @@ impl ShopBackend {
     pub async fn close_order(&self, order_id: i32) -> Result<()> {
         self.login_check(function_name!())?;
         if let UserType::Mechanic = self.user.user_type() {
-            match self.db.get_order_by_id(order_id).await? {
+            match Order::find_by_id(order_id).one(&self.db).await? {
                 Some(order) => {
                     let mut order: order::ActiveModel = order.into();
                     order.finished = Set(true);
-                    self.db.update_order(order).await?;
+                    order.update(&self.db).await?;
                 }
                 None => bail!(DbError(format!("order {order_id} does not exist"))),
             }
@@ -328,7 +333,7 @@ impl ShopBackend {
     pub async fn register_report(&self, order_id: i32, cost: i32) -> Result<()> {
         self.login_check(function_name!())?;
         match self.user.user_type() {
-            UserType::Technician => match self.db.get_order_by_id(order_id).await? {
+            UserType::Technician => match Order::find_by_id(order_id).one(&self.db).await? {
                 Some(order) => {
                     let report = report::ActiveModel {
                         client_id: Set(order.client_id),
@@ -336,7 +341,7 @@ impl ShopBackend {
                         cost: Set(cost),
                         ..Default::default()
                     };
-                    self.db.register_report(report).await?;
+                    report.insert(&self.db).await?;
                     Ok(())
                 }
                 None => bail!(DbError(format!("order {order_id} does not exist"))),
