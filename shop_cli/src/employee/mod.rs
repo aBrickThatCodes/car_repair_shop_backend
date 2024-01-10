@@ -10,7 +10,6 @@ use crate::common::*;
 
 use self::{mechanic::mechanic_loop, technician::technician_loop};
 
-#[allow(clippy::never_loop)]
 pub async fn employee_loop(term: &Term, mut backend: ShopBackend) -> Result<()> {
     loop {
         let user = login_screen(term, &mut backend).await?;
