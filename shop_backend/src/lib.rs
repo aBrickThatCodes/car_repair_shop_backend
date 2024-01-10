@@ -224,7 +224,7 @@ impl ShopBackend {
     #[named]
     pub async fn register_order(&self, client_id: i32, service: &Service) -> Result<()> {
         self.login_check(function_name!())?;
-        if matches!(self.user.user_type(), UserType::Mechanic) {
+        if matches!(self.user.user_type(), UserType::Technician) {
             bail!(PermissionError);
         }
 
