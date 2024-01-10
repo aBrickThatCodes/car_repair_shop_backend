@@ -109,8 +109,10 @@ async fn register_car(
             term.write_line("Register car")?;
             let make: String = input(term, "Make")?;
             let model: String = input(term, "Model")?;
-            backend.register_car(client_id, &make, &model).await?;
-            term.write_line(&format!("{make} {model} registered"))?;
+            match backend.register_car(client_id, &make, &model).await {
+                Ok(_) => term.write_line(&format!("{make} {model} registered"))?,
+                Err(e) => term.write_line(&format!("{e}"))?,
+            }
         }
     }
 

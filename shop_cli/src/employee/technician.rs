@@ -71,15 +71,10 @@ async fn register_car(term: &Term, backend: &ShopBackend) -> Result<()> {
 
     match backend.register_car(client_id, &make, &model).await {
         Ok(_) => term.write_line(&format!("{make} {model} registered to client {client_id}"))?,
-        Err(e) => match e.downcast_ref::<DbError>() {
-            Some(DbError(s)) => {
-                term.write_line(s)?;
-                wait_for_continue(term)?;
-                term.clear_screen()?;
-            }
-            None => bail!(e),
-        },
+        Err(e) => term.write_line(&format!("{e}"))?,
     }
+
+    wait_for_continue(term)?;
     Ok(())
 }
 

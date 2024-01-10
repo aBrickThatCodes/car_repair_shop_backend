@@ -156,7 +156,7 @@ impl ShopBackend {
                     Ok(())
                 }
             },
-            None => bail!(DbError(format!("client {client_id} does not exits"))),
+            None => bail!(DbError(format!("client {client_id} does not exist"))),
         }
     }
 
@@ -181,9 +181,10 @@ impl ShopBackend {
                 Some(report) => {
                     let order_id = report.order_id;
                     let order = self.db.get_order_by_id(order_id).await?.unwrap();
-                    Ok(String::from(
-                        ORDER_REPLACE_REGEX.replace(&format!("{report}"), format!("{order}")),
-                    ))
+                    Ok(String::from(ORDER_REPLACE_REGEX.replace(
+                        &format!("{report}"),
+                        FINISHED_REPLACE_REGEX.replace(&format!("{order}"), ""),
+                    )))
                 }
                 None => bail!(DbError(format!("report {report_id} does not exist"))),
             },
@@ -229,7 +230,7 @@ impl ShopBackend {
         }
 
         let Some(client) = self.db.get_client_by_id(client_id).await? else {
-            bail!(DbError(format!("client {client_id} does not exits")));
+            bail!(DbError(format!("client {client_id} does not exist")));
         };
 
         match client.car {
@@ -252,7 +253,7 @@ impl ShopBackend {
 
         match self.db.get_client_by_id(order_id).await? {
             Some(_) => Ok(()),
-            None => bail!(DbError(format!("order {order_id} does not exits"))),
+            None => bail!(DbError(format!("order {order_id} does not exist"))),
         }
     }
 
@@ -272,7 +273,7 @@ impl ShopBackend {
 
     pub async fn get_finished_orders(&self) -> Result<Vec<String>> {
         match self.user.user_type() {
-            UserType::Mechanic => {
+            UserType::Technician => {
                 let orders = self.db.get_orders().await?;
                 Ok(orders
                     .iter()
