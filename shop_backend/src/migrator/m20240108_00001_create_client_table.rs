@@ -14,7 +14,7 @@ pub enum Client {
     Id,
     Name,
     Email,
-    Password,
+    PasswordHash,
     Car,
 }
 
@@ -40,7 +40,7 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .unique_key(),
                     )
-                    .col(ColumnDef::new(Client::Password).string().not_null())
+                    .col(ColumnDef::new(Client::PasswordHash).string().not_null())
                     .col(ColumnDef::new(Client::Car).json())
                     .to_owned(),
             )

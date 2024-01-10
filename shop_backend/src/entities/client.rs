@@ -10,7 +10,7 @@ pub struct Model {
     pub id: i32,
     pub name: String,
     pub email: String,
-    pub password: String,
+    pub password_hash: String,
     pub car: Option<Car>,
 }
 

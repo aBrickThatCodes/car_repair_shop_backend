@@ -3,7 +3,7 @@ mod error;
 mod migrator;
 mod user;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 use function_name::named;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -25,6 +25,9 @@ pub use user::*;
 
 static EMAIL_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^[\w\-\.]+@([\w-]+\.)+[\w-]{2,}$").unwrap());
+
+static HASH_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\$2[aby]?\$\d{1,2}\$[./A-Za-z0-9]{53}$").unwrap());
 
 pub struct ShopBackend {
     db: DatabaseConnection,
@@ -57,11 +60,15 @@ impl ShopBackend {
         Ok(db)
     }
 
-    pub async fn client_login(&mut self, email: &str, password: &str) -> Result<User> {
+    pub async fn client_login(&mut self, email: &str, password_hash: &str) -> Result<User> {
         assert!(!self.is_logged_in(), "already logged in");
 
         if !EMAIL_REGEX.is_match(email) {
-            bail!(RegisterClientError::EmailIncorrectFormat(email.to_owned()));
+            bail!(LoginError::EmailIncorrectFormat(email.to_owned()));
+        }
+
+        if !HASH_REGEX.is_match(password_hash) {
+            bail!(LoginError::PasswordNotHashed)
         }
 
         match Client::find()
@@ -70,26 +77,27 @@ impl ShopBackend {
             .await?
         {
             Some(client) => {
-                if client.password != *password {
-                    bail!(anyhow!(LoginError::new(&format!(
-                        "incorrect password for {email}"
-                    ))));
+                if client.password_hash != *password_hash {
+                    bail!(LoginError::ClientIncorrectPassword(email.to_string()));
                 }
                 self.user = User::logged_in(client.id, &client.name, UserType::Client);
                 Ok(self.user.clone())
             }
-            None => bail!(DbError(format!("no user with email {email}"))),
+            None => bail!(LoginError::EmailNotRegistered(email.to_string())),
         }
     }
 
-    pub async fn employee_login(&mut self, id: i32, password: &str) -> Result<User> {
+    pub async fn employee_login(&mut self, id: i32, password_hash: &str) -> Result<User> {
         assert!(!self.is_logged_in(), "already logged in");
+
+        if !HASH_REGEX.is_match(password_hash) {
+            bail!(LoginError::PasswordNotHashed)
+        }
+
         match Employee::find_by_id(id).one(&self.db).await? {
             Some(employee) => {
-                if employee.password != *password {
-                    bail!(LoginError::new(&format!(
-                        "incorrect password for employee {id}"
-                    )));
+                if employee.password != *password_hash {
+                    bail!(LoginError::EmployeeIncorrectPassword(id));
                 }
 
                 match employee.role {
@@ -104,7 +112,7 @@ impl ShopBackend {
 
                 Ok(self.user.clone())
             }
-            None => bail!(DbError(format!("employee {id} does not exist"))),
+            None => bail!(LoginError::EmployeeNotRegistered(id)),
         }
     }
 
@@ -128,7 +136,7 @@ impl ShopBackend {
         &mut self,
         name: &str,
         email: &str,
-        password: &str,
+        password_hash: &str,
     ) -> Result<User> {
         assert!(
             !self.is_logged_in(),
@@ -153,7 +161,7 @@ impl ShopBackend {
         let client = client::ActiveModel {
             name: Set(name.to_owned()),
             email: Set(email.to_owned()),
-            password: Set(password.to_owned()),
+            password_hash: Set(password_hash.to_owned()),
             ..Default::default()
         };
         let res = client.insert(&self.db).await?;
