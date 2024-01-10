@@ -6,7 +6,7 @@ mod user;
 
 pub use entities::order::Service;
 pub use error::*;
-pub use user::User;
+pub use user::*;
 
 use database::ShopDb;
 use entities::client::{self, Car};
@@ -34,11 +34,11 @@ impl ShopBackend {
 
         Ok(ShopBackend {
             db,
-            user: User::NotLoggedIn,
+            user: User::not_logged_in(),
         })
     }
 
-    pub async fn client_login(&mut self, email: &String, password: &String) -> Result<User> {
+    pub async fn client_login(&mut self, email: &str, password: &str) -> Result<User> {
         assert!(!self.is_logged_in(), "already logged in");
 
         if !EMAIL_REGEX.is_match(email) {
@@ -52,18 +52,14 @@ impl ShopBackend {
                         "incorrect password for {email}"
                     ))));
                 }
-                self.user = User::Client {
-                    id: client.id,
-                    email: email.to_owned(),
-                    name: client.name,
-                };
+                self.user = User::logged_in(client.id, &client.name, UserType::Client);
                 Ok(self.user.clone())
             }
             None => bail!(DbError(format!("no user with email {email}"))),
         }
     }
 
-    pub async fn employee_login(&mut self, id: i32, password: &String) -> Result<User> {
+    pub async fn employee_login(&mut self, id: i32, password: &str) -> Result<User> {
         assert!(!self.is_logged_in(), "already logged in");
         match self.db.get_employee_by_id(id).await? {
             Some(employee) => {
@@ -73,16 +69,11 @@ impl ShopBackend {
 
                 match employee.role {
                     entities::employee::Role::Technician => {
-                        self.user = User::Technician {
-                            id,
-                            name: employee.name,
-                        }
+                        self.user =
+                            User::logged_in(employee.id, &employee.name, UserType::Technician)
                     }
                     entities::employee::Role::Mechanic => {
-                        self.user = User::Mechanic {
-                            id,
-                            name: employee.name,
-                        }
+                        self.user = User::logged_in(employee.id, &employee.name, UserType::Mechanic)
                     }
                 }
 
@@ -93,12 +84,12 @@ impl ShopBackend {
     }
 
     pub async fn log_out(&mut self) -> User {
-        self.user = User::NotLoggedIn;
-        User::NotLoggedIn
+        self.user = User::not_logged_in();
+        self.user.clone()
     }
 
     pub fn is_logged_in(&self) -> bool {
-        !matches!(self.user, User::NotLoggedIn)
+        !matches!(self.user.user_type(), UserType::NotLoggedIn)
     }
 
     fn login_check(&self, func_name: &str) -> Result<()> {
@@ -110,9 +101,9 @@ impl ShopBackend {
 
     pub async fn register_client(
         &mut self,
-        name: &String,
-        email: &String,
-        password: &String,
+        name: &str,
+        email: &str,
+        password: &str,
     ) -> Result<User> {
         assert!(
             !self.is_logged_in(),
@@ -137,18 +128,14 @@ impl ShopBackend {
         };
         self.db.register_client(client).await?;
         let client = self.db.get_client_by_email(email).await?.unwrap();
-        self.user = User::Client {
-            email: email.to_owned(),
-            id: client.id,
-            name: name.to_owned(),
-        };
+        self.user = User::logged_in(client.id, name, UserType::Client);
         Ok(self.user.clone())
     }
 
     #[named]
-    pub async fn register_car(&self, client_id: i32, make: &String, model: &String) -> Result<()> {
+    pub async fn register_car(&self, client_id: i32, make: &str, model: &str) -> Result<()> {
         self.login_check(function_name!())?;
-        if matches!(self.user, User::Mechanic { .. }) {
+        if matches!(self.user.user_type(), UserType::Mechanic { .. }) {
             bail!(PermissionError)
         }
 
@@ -184,8 +171,8 @@ impl ShopBackend {
         static ORDER_REPLACE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"").unwrap());
 
         self.login_check(function_name!())?;
-        match self.user {
-            User::Client { .. } => match self.db.get_report_by_id(report_id).await? {
+        match self.user.user_type() {
+            UserType::Client { .. } => match self.db.get_report_by_id(report_id).await? {
                 Some(report) => {
                     let order_id = report.order_id;
                     let order = self.db.get_order_by_id(order_id).await?.unwrap();
@@ -202,9 +189,9 @@ impl ShopBackend {
     #[named]
     pub async fn get_client_orders(&self) -> Result<Vec<String>> {
         self.login_check(function_name!())?;
-        match self.user {
-            User::Client { id, .. } => {
-                let orders = self.db.get_clients_orders(id).await?;
+        match self.user.user_type() {
+            UserType::Client => {
+                let orders = self.db.get_clients_orders(self.user.id()).await?;
                 Ok(orders
                     .into_iter()
                     .map(|r| format!("{r:?}").replace("Model", "Order"))
@@ -217,9 +204,9 @@ impl ShopBackend {
     #[named]
     pub async fn get_client_reports(&self) -> Result<Vec<String>> {
         self.login_check(function_name!())?;
-        match self.user {
-            User::Client { id, .. } => {
-                let reps = self.db.get_clients_reports(id).await?;
+        match self.user.user_type() {
+            UserType::Client => {
+                let reps = self.db.get_clients_reports(self.user.id()).await?;
                 Ok(reps
                     .into_iter()
                     .map(|r| format!("{r:?}").replace("Model", "Report"))
@@ -232,7 +219,7 @@ impl ShopBackend {
     #[named]
     pub async fn register_order(&self, client_id: i32, service: &Service) -> Result<()> {
         self.login_check(function_name!())?;
-        if matches!(self.user, User::Mechanic { .. }) {
+        if matches!(self.user.user_type(), UserType::Mechanic) {
             bail!(PermissionError);
         }
 
@@ -255,8 +242,8 @@ impl ShopBackend {
     }
 
     pub async fn get_standing_orders(&self) -> Result<Vec<String>> {
-        match self.user {
-            User::Mechanic { .. } => {
+        match self.user.user_type() {
+            UserType::Mechanic => {
                 let orders = self.db.get_standing_orders().await?;
                 Ok(orders
                     .into_iter()
@@ -270,7 +257,7 @@ impl ShopBackend {
     #[named]
     pub async fn change_inspection_to_repair(&self, order_id: i32) -> Result<()> {
         self.login_check(function_name!())?;
-        if let User::Mechanic { .. } = self.user {
+        if let UserType::Mechanic = self.user.user_type() {
             match self.db.get_order_by_id(order_id).await? {
                 Some(order) => match &order.service {
                     order::Service::Inspection => {
@@ -291,8 +278,8 @@ impl ShopBackend {
     #[named]
     pub async fn register_report(&self, order_id: i32, cost: i32) -> Result<()> {
         self.login_check(function_name!())?;
-        match self.user {
-            User::Mechanic { .. } => match self.db.get_order_by_id(order_id).await? {
+        match self.user.user_type() {
+            UserType::Mechanic => match self.db.get_order_by_id(order_id).await? {
                 Some(order) => {
                     let mut order: order::ActiveModel = order.into();
                     order.finished = Set(true);

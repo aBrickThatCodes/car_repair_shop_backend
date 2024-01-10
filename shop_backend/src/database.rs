@@ -35,7 +35,7 @@ impl ShopDb {
         Ok(v)
     }
 
-    pub async fn get_client_by_email(&self, email: &String) -> Result<Option<client::Model>> {
+    pub async fn get_client_by_email(&self, email: &str) -> Result<Option<client::Model>> {
         let v = Client::find()
             .filter(client::Column::Email.eq(email))
             .one(&self.db)

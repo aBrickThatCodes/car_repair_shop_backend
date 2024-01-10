@@ -20,18 +20,14 @@ pub async fn client_loop(term: &Term, mut backend: ShopBackend) -> Result<()> {
     loop {
         let user = login_screen(term, &mut backend).await?;
 
-        let User::Client { id, email, name } = user else {
-            unreachable!()
-        };
-
         loop {
-            let car = backend.get_car(id).await?;
+            let car = backend.get_car(user.id()).await?;
 
             term.clear_screen()?;
 
             term.write_line("Car Repair Shop Account")?;
 
-            term.write_line(&format!("User: {name}(ID: {id} email: {email})"))?;
+            term.write_line(&format!("User: {}(ID: {})", user.name(), user.id()))?;
             if let Some(car) = &car {
                 term.write_line(car)?;
             }
@@ -40,8 +36,8 @@ pub async fn client_loop(term: &Term, mut backend: ShopBackend) -> Result<()> {
             term.clear_screen()?;
 
             match choice {
-                0 => register_car(term, &mut backend, id, car).await?,
-                1 => create_order(term, &mut backend, id, car).await?,
+                0 => register_car(term, &mut backend, user.id(), car).await?,
+                1 => create_order(term, &mut backend, user.id(), car).await?,
                 2 => list_orders(term, &mut backend).await?,
                 3 => list_reports(term, &mut backend).await?,
                 4 => print_summary(term, &mut backend).await?,
@@ -79,7 +75,7 @@ async fn login_screen(term: &Term, backend: &mut ShopBackend) -> Result<User> {
             String::new()
         };
 
-        let email = Input::new().with_prompt("Email").interact_text_on(term)?;
+        let email: String = Input::new().with_prompt("Email").interact_text_on(term)?;
         let password = Password::new().with_prompt("Password").interact_on(term)?;
 
         let user = match choice {

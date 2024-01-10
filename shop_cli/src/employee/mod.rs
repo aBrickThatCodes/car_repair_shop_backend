@@ -13,9 +13,9 @@ pub async fn employee_loop(term: &Term, mut backend: ShopBackend) -> Result<()> 
     loop {
         let user = login_screen(term, &mut backend).await?;
         term.write_line(&format!("{user:?}"))?;
-        match &user {
-            User::Technician { .. } => todo!("technician_loop"),
-            User::Mechanic { .. } => todo!("mechanic_loop"),
+        match &user.user_type() {
+            UserType::Technician => todo!("technician_loop"),
+            UserType::Mechanic => todo!("mechanic_loop"),
             _ => unreachable!(),
         }
     }
