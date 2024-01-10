@@ -151,9 +151,9 @@ async fn register_report(term: &Term, backend: &ShopBackend) -> Result<()> {
         term.write_line("Register order")?;
         let order_id: String = Input::new()
             .with_prompt("Order ID (or nothing to go back)")
-            .default("-1".to_string())
+            .default(String::from("0"))
             .interact_text_on(term)?;
-        match order_id.parse::<i32>() {
+        match order_id.parse::<u32>() {
             Ok(i) => break i,
             Err(e) => {
                 term.write_line(&format!("{e}"))?;
@@ -163,19 +163,8 @@ async fn register_report(term: &Term, backend: &ShopBackend) -> Result<()> {
         }
     };
 
-    if order_id == -1 {
+    if order_id == 0 {
         return Ok(());
-    }
-
-    if let Err(e) = backend.check_order_id(order_id).await {
-        match e.downcast_ref::<DbError>() {
-            Some(DbError(s)) => {
-                term.write_line(s)?;
-                wait_for_continue(term)?;
-                return Ok(());
-            }
-            None => bail!(e),
-        }
     }
 
     let cost = loop {
@@ -190,9 +179,20 @@ async fn register_report(term: &Term, backend: &ShopBackend) -> Result<()> {
         }
     };
 
-    backend.register_report(order_id, cost).await?;
-    term.write_line(&format!("Report on {order_id} has been registered"))?;
-    wait_for_continue(term)?;
+    match backend.register_report(order_id as i32, cost).await {
+        Ok(_) => {
+            term.write_line(&format!("Report on {order_id} has been registered"))?;
+            wait_for_continue(term)?;
 
-    Ok(())
+            Ok(())
+        }
+        Err(e) => match e.downcast_ref::<DbError>() {
+            Some(DbError(s)) => {
+                term.write_line(s)?;
+                wait_for_continue(term)?;
+                return Ok(());
+            }
+            None => bail!(e),
+        },
+    }
 }

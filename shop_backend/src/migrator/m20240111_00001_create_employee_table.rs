@@ -1,7 +1,5 @@
-use sea_orm::{ActiveModelTrait, EnumIter, Iterable, Set};
+use sea_orm::{EnumIter, Iterable};
 use sea_orm_migration::prelude::*;
-
-use crate::entities::employee;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -49,25 +47,6 @@ impl MigrationTrait for Migration {
                     .to_owned(),
             )
             .await?;
-        let db = manager.get_connection();
-
-        employee::ActiveModel {
-            id: Set(1),
-            password: Set(String::from("password")),
-            name: Set(String::from("Placeholder")),
-            role: Set(employee::Role::Technician),
-        }
-        .insert(db)
-        .await?;
-
-        employee::ActiveModel {
-            id: Set(2),
-            password: Set(String::from("password")),
-            name: Set(String::from("Placeholder")),
-            role: Set(employee::Role::Mechanic),
-        }
-        .insert(db)
-        .await?;
 
         Ok(())
     }
