@@ -41,7 +41,11 @@ impl Client {
 
 impl Display for Client {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} (ID {} | email {})", self.name, self.id, self.email)
+        write!(
+            f,
+            "ID: {} | Name: {} | Email: {})",
+            self.name, self.id, self.email
+        )
     }
 }
 
@@ -76,7 +80,11 @@ impl Employee {
 
 impl Display for Employee {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {} (ID {})", self.role, self.name, self.id)
+        write!(
+            f,
+            "ID: {} | Name: {} | Role: {})",
+            self.id, self.name, self.role
+        )
     }
 }
 
