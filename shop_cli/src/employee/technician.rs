@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use dialoguer::{console::Term, *};
 use shop_backend::*;
 
@@ -36,7 +36,7 @@ pub async fn technician_loop(term: &Term, backend: &mut ShopBackend, user: &User
             2 => list_finished_orders(term, backend).await?,
             3 => register_report(term, backend).await?,
             4 => {
-                backend.log_out().await;
+                backend.log_out().await?;
                 break Ok(());
             }
             _ => unreachable!(),
@@ -49,12 +49,12 @@ async fn register_car(term: &Term, backend: &ShopBackend) -> Result<()> {
         term.write_line("Register car")?;
         let client_id: String = Input::new()
             .with_prompt("Client ID (or nothing to go back)")
-            .default("-1".to_string())
+            .default("0".to_string())
             .interact_text_on(term)?;
-        match client_id.parse::<i32>() {
+        match client_id.parse::<u32>() {
             Ok(i) => break i,
             Err(e) => {
-                term.write_line(&format!("{e}"))?;
+                term.write_line(&format_err(&e))?;
                 wait_for_continue(term)?;
                 term.clear_screen()?;
                 continue;
@@ -62,7 +62,7 @@ async fn register_car(term: &Term, backend: &ShopBackend) -> Result<()> {
         }
     };
 
-    if client_id == -1 {
+    if client_id == 0 {
         return Ok(());
     }
 
@@ -71,7 +71,7 @@ async fn register_car(term: &Term, backend: &ShopBackend) -> Result<()> {
 
     match backend.register_car(client_id, &make, &model).await {
         Ok(_) => term.write_line(&format!("{make} {model} registered to client {client_id}"))?,
-        Err(e) => term.write_line(&format!("{e}"))?,
+        Err(e) => term.write_line(&format_err(&e.source().unwrap()))?,
     }
 
     wait_for_continue(term)?;
@@ -96,12 +96,12 @@ async fn register_order(term: &Term, backend: &ShopBackend) -> Result<()> {
         term.write_line("Register order")?;
         let client_id: String = Input::new()
             .with_prompt("Client ID (or nothing to go back)")
-            .default("-1".to_string())
+            .default("0".to_string())
             .interact_text_on(term)?;
-        match client_id.parse::<i32>() {
+        match client_id.parse::<u32>() {
             Ok(i) => break i,
             Err(e) => {
-                term.write_line(&format!("{e}"))?;
+                term.write_line(&format_err(&e))?;
                 wait_for_continue(term)?;
                 term.clear_screen()?;
                 continue;
@@ -109,7 +109,7 @@ async fn register_order(term: &Term, backend: &ShopBackend) -> Result<()> {
         }
     };
 
-    if client_id == -1 {
+    if client_id == 0 {
         return Ok(());
     }
 
@@ -122,7 +122,7 @@ async fn register_order(term: &Term, backend: &ShopBackend) -> Result<()> {
             ))?;
             wait_for_continue(term)?;
         }
-        Err(e) => term.write_line(&format!("{e}"))?,
+        Err(e) => term.write_line(&format_err(&e.source().unwrap()))?,
     }
 
     Ok(())
@@ -156,7 +156,7 @@ async fn register_report(term: &Term, backend: &ShopBackend) -> Result<()> {
         match order_id.parse::<u32>() {
             Ok(i) => break i,
             Err(e) => {
-                term.write_line(&format!("{e}"))?;
+                term.write_line(&format_err(&e))?;
                 wait_for_continue(term)?;
                 continue;
             }
@@ -169,30 +169,23 @@ async fn register_report(term: &Term, backend: &ShopBackend) -> Result<()> {
 
     let cost = loop {
         let order_id: String = Input::new().with_prompt("Cost").interact_text_on(term)?;
-        match order_id.parse::<i32>() {
+        match order_id.parse::<u32>() {
             Ok(i) => break i,
             Err(e) => {
-                term.write_line(&format!("{e}"))?;
+                term.write_line(&format_err(&e))?;
                 wait_for_continue(term)?;
                 continue;
             }
         }
     };
 
-    match backend.register_report(order_id as i32, cost).await {
+    match backend.register_report(order_id as u32, cost).await {
         Ok(_) => {
             term.write_line(&format!("Report on {order_id} has been registered"))?;
-            wait_for_continue(term)?;
-
-            Ok(())
         }
-        Err(e) => match e.downcast_ref::<DbError>() {
-            Some(DbError(s)) => {
-                term.write_line(s)?;
-                wait_for_continue(term)?;
-                return Ok(());
-            }
-            None => bail!(e),
-        },
+        Err(e) => term.write_line(&format_err(&e.source().unwrap()))?,
     }
+    wait_for_continue(term)?;
+
+    Ok(())
 }

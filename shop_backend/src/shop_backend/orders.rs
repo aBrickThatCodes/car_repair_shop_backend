@@ -6,23 +6,23 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
 impl ShopBackend {
     #[named]
-    pub async fn register_order(&self, client_id: i32, service: &Service) -> Result<()> {
+    pub async fn register_order(&self, client_id: u32, service: &Service) -> Result<()> {
         self.login_check(function_name!())?;
         if matches!(self.user.user_type(), UserType::Technician) {
             bail!(PermissionError);
         }
 
-        let Some(client) = db_entities::prelude::Client::find_by_id(client_id)
+        let Some(client) = db_entities::prelude::Client::find_by_id(client_id as i32)
             .one(&self.db)
             .await?
         else {
-            bail!(DbError(format!("client {client_id} does not exist")));
+            bail!(DbError::Client(client_id));
         };
 
         match client.car {
             Some(_) => {
                 let order = order::ActiveModel {
-                    client_id: Set(client_id),
+                    client_id: Set(client_id as i32),
                     service: Set(service.to_owned()),
                     ..Default::default()
                 };
@@ -63,10 +63,10 @@ impl ShopBackend {
     }
 
     #[named]
-    pub async fn change_inspection_to_repair(&self, order_id: i32) -> Result<()> {
+    pub async fn change_inspection_to_repair(&self, order_id: u32) -> Result<()> {
         self.login_check(function_name!())?;
         if let UserType::Mechanic = self.user.user_type() {
-            match db_entities::prelude::Order::find_by_id(order_id)
+            match db_entities::prelude::Order::find_by_id(order_id as i32)
                 .one(&self.db)
                 .await?
             {
@@ -79,7 +79,7 @@ impl ShopBackend {
                     }
                     _ => bail!("service to be performed was not inspection"),
                 },
-                None => bail!(DbError(format!("order {order_id} does not exist"))),
+                None => bail!(DbError::Order(order_id)),
             }
         } else {
             bail!(PermissionError);
@@ -87,10 +87,10 @@ impl ShopBackend {
     }
 
     #[named]
-    pub async fn close_order(&self, order_id: i32) -> Result<()> {
+    pub async fn close_order(&self, order_id: u32) -> Result<()> {
         self.login_check(function_name!())?;
         if let UserType::Mechanic = self.user.user_type() {
-            match db_entities::prelude::Order::find_by_id(order_id)
+            match db_entities::prelude::Order::find_by_id(order_id as i32)
                 .one(&self.db)
                 .await?
             {
@@ -99,7 +99,7 @@ impl ShopBackend {
                     order.finished = Set(true);
                     order.update(&self.db).await?;
                 }
-                None => bail!(DbError(format!("order {order_id} does not exist"))),
+                None => bail!(DbError::Order(order_id)),
             }
         } else {
             bail!(PermissionError);

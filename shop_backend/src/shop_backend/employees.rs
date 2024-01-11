@@ -8,7 +8,7 @@ use anyhow::{bail, Result};
 use sea_orm::EntityTrait;
 
 impl ShopBackend {
-    pub async fn employee_login(&mut self, id: i32, password_hash: &str) -> Result<User> {
+    pub async fn employee_login(&mut self, id: u32, password_hash: &str) -> Result<User> {
         if !matches!(self.user.user_type(), UserType::NotLoggedIn) {
             bail!(LoginError::AlreadyLoggedIn);
         };
@@ -17,7 +17,7 @@ impl ShopBackend {
             bail!(LoginError::PasswordNotHashed)
         }
 
-        match db_entities::prelude::Employee::find_by_id(id)
+        match db_entities::prelude::Employee::find_by_id(id as i32)
             .one(&self.db)
             .await?
         {
@@ -28,11 +28,10 @@ impl ShopBackend {
 
                 match employee.role {
                     employee::Role::Technician => {
-                        self.user =
-                            User::logged_in(employee.id, &employee.name, UserType::Technician)
+                        self.user = User::logged_in(id, &employee.name, UserType::Technician)
                     }
                     employee::Role::Mechanic => {
-                        self.user = User::logged_in(employee.id, &employee.name, UserType::Mechanic)
+                        self.user = User::logged_in(id, &employee.name, UserType::Mechanic)
                     }
                 }
 

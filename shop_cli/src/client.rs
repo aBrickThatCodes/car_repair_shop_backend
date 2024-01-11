@@ -1,9 +1,11 @@
 use std::process::exit;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
+use bcrypt::DEFAULT_COST;
 use console::Term;
 use dialoguer::*;
 use shop_backend::*;
+use zeroize::Zeroizing;
 
 use crate::common::*;
 
@@ -27,9 +29,9 @@ pub async fn client_loop(term: &Term, mut backend: ShopBackend) -> Result<()> {
 
             term.write_line("Car Repair Shop Account")?;
 
-            term.write_line(&format!("User: {}(ID: {})", user.name(), user.id()))?;
+            term.write_line(&format!("User: {} (ID: {})", user.name(), user.id()))?;
             if let Some(car) = &car {
-                term.write_line(car)?;
+                term.write_line(&format!("{car}"))?;
             }
 
             let choice = Select::new().items(&CLIENT_OPTIONS).default(0).interact()?;
@@ -42,7 +44,7 @@ pub async fn client_loop(term: &Term, mut backend: ShopBackend) -> Result<()> {
                 3 => list_reports(term, &backend).await?,
                 4 => print_summary(term, &backend).await?,
                 5 => {
-                    backend.log_out().await;
+                    backend.log_out().await?;
                     break;
                 }
                 _ => unreachable!(),
@@ -76,18 +78,19 @@ async fn login_screen(term: &Term, backend: &mut ShopBackend) -> Result<User> {
         };
 
         let email = input(term, "Email")?;
-        let password = Password::new().with_prompt("Password").interact_on(term)?;
+        let password = Zeroizing::new(Password::new().with_prompt("Password").interact_on(term)?);
+        let password_hash = bcrypt::hash(password, DEFAULT_COST)?;
 
         let user = match choice {
-            0 => backend.client_login(&email, &password).await,
-            1 => backend.register_client(&name, &email, &password).await,
+            0 => backend.client_login(&email, &password_hash).await,
+            1 => backend.register_client(&name, &email, &password_hash).await,
             _ => unreachable!(),
         };
 
         term.clear_screen()?;
         match user {
             Err(e) => {
-                term.write_line(&format!("{e}"))?;
+                term.write_line(&format_err(&e.source().unwrap()))?;
                 wait_for_continue(term)?;
                 continue;
             }
@@ -99,8 +102,8 @@ async fn login_screen(term: &Term, backend: &mut ShopBackend) -> Result<User> {
 async fn register_car(
     term: &Term,
     backend: &ShopBackend,
-    client_id: i32,
-    car: Option<String>,
+    client_id: u32,
+    car: Option<Car>,
 ) -> Result<()> {
     match car {
         Some(_) => term.write_line("You already have registered a car")?,
@@ -111,7 +114,7 @@ async fn register_car(
             let model: String = input(term, "Model")?;
             match backend.register_car(client_id, &make, &model).await {
                 Ok(_) => term.write_line(&format!("{make} {model} registered"))?,
-                Err(e) => term.write_line(&format!("{e}"))?,
+                Err(e) => term.write_line(&format_err(&e.source().unwrap()))?,
             }
         }
     }
@@ -123,8 +126,8 @@ async fn register_car(
 async fn register_order(
     term: &Term,
     backend: &ShopBackend,
-    client_id: i32,
-    car: Option<String>,
+    client_id: u32,
+    car: Option<Car>,
 ) -> Result<()> {
     match car {
         Some(_) => {
@@ -170,7 +173,7 @@ async fn list_orders(term: &Term, backend: &ShopBackend) -> Result<()> {
         }
 
         for order in orders {
-            term.write_line(&order)?;
+            term.write_line(&format!("{order}"))?;
         }
 
         wait_for_continue(term)?;
@@ -189,7 +192,7 @@ async fn list_reports(term: &Term, backend: &ShopBackend) -> Result<()> {
     }
 
     for report in reports {
-        term.write_line(&report)?;
+        term.write_line(&format!("{report}"))?;
     }
     wait_for_continue(term)?;
 
@@ -201,34 +204,26 @@ async fn print_summary(term: &Term, backend: &ShopBackend) -> Result<()> {
         term.write_line("Get report summary")?;
         let report_id: String = Input::new()
             .with_prompt("Report ID (or nothing to go back)")
-            .default("-1".to_string())
+            .default(String::from("0"))
             .interact_text_on(term)?;
-        match report_id.parse::<i32>() {
+        match report_id.parse::<u32>() {
             Ok(i) => break i,
             Err(e) => {
-                term.write_line(&format!("{e}"))?;
+                term.write_line(&format_err(&e))?;
                 wait_for_continue(term)?;
                 continue;
             }
         }
     };
 
-    if report_id == -1 {
+    if report_id == 0 {
         return Ok(());
     }
 
-    let summary = match backend.get_report_summary(report_id).await {
-        Ok(s) => s,
-        Err(e) => match e.downcast_ref::<DbError>() {
-            Some(DbError(s)) => {
-                term.write_line(s)?;
-                wait_for_continue(term)?;
-                return Ok(());
-            }
-            None => bail!(e),
-        },
+    match backend.get_report(report_id).await {
+        Ok(report) => term.write_line(&format!("{report}"))?,
+        Err(e) => term.write_line(&format_err(&e.source().unwrap()))?,
     };
-    term.write_line(&summary)?;
     wait_for_continue(term)?;
     Ok(())
 }

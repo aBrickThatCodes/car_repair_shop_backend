@@ -32,7 +32,7 @@ impl ShopBackend {
                     bail!(LoginError::ClientIncorrectPassword(email.to_string()));
                 }
 
-                self.user = User::logged_in(client.id, &client.name, UserType::Client);
+                self.user = User::logged_in(client.id as u32, &client.name, UserType::Client);
                 Ok(self.user.clone())
             }
             None => {
@@ -73,22 +73,22 @@ impl ShopBackend {
                     ..Default::default()
                 };
                 let res = client.insert(&self.db).await?;
-                self.user = User::logged_in(res.id, name, UserType::Client);
+                self.user = User::logged_in(res.id as u32, name, UserType::Client);
                 Ok(self.user.clone())
             }
         }
     }
 
     #[named]
-    pub async fn get_car(&self, client_id: i32) -> Result<Option<Car>> {
+    pub async fn get_car(&self, client_id: u32) -> Result<Option<Car>> {
         self.login_check(function_name!())?;
 
-        match db_entities::prelude::Client::find_by_id(client_id)
+        match db_entities::prelude::Client::find_by_id(client_id as i32)
             .one(&self.db)
             .await?
         {
             Some(client) => Ok(client.car.clone()),
-            None => unreachable!(),
+            None => bail!(DbError::Client(client_id)),
         }
     }
 
@@ -97,7 +97,7 @@ impl ShopBackend {
         self.login_check(function_name!())?;
         match self.user.user_type() {
             UserType::Client => {
-                let client = db_entities::prelude::Client::find_by_id(self.user.id())
+                let client = db_entities::prelude::Client::find_by_id(self.user.id() as i32)
                     .one(&self.db)
                     .await?
                     .unwrap();
@@ -116,7 +116,7 @@ impl ShopBackend {
         self.login_check(function_name!())?;
         match self.user.user_type() {
             UserType::Client => {
-                let client = db_entities::prelude::Client::find_by_id(self.user.id())
+                let client = db_entities::prelude::Client::find_by_id(self.user.id() as i32)
                     .one(&self.db)
                     .await?
                     .unwrap();

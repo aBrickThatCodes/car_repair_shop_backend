@@ -2,9 +2,11 @@ mod mechanic;
 mod technician;
 
 use anyhow::Result;
+use bcrypt::DEFAULT_COST;
 use console::Term;
 use dialoguer::*;
 use shop_backend::*;
+use zeroize::Zeroizing;
 
 use crate::common::*;
 
@@ -42,9 +44,10 @@ async fn login_screen(term: &Term, backend: &mut ShopBackend) -> Result<User> {
         term.write_line("Login")?;
 
         let id: String = input(term, "ID")?;
-        let mut password = Password::new().with_prompt("Password").interact_on(term)?;
+        let password = Zeroizing::new(Password::new().with_prompt("Password").interact_on(term)?);
+        let password_hash = bcrypt::hash(password, DEFAULT_COST)?;
 
-        let id = match id.parse::<i32>() {
+        let id = match id.parse::<u32>() {
             Ok(i) => i,
             Err(_) => {
                 term.write_line(&format!("{} is not a valid ID", id))?;
@@ -52,7 +55,7 @@ async fn login_screen(term: &Term, backend: &mut ShopBackend) -> Result<User> {
             }
         };
 
-        let user = backend.employee_login(id, &mut password).await;
+        let user = backend.employee_login(id, &password_hash).await;
 
         term.clear_screen()?;
         match user {

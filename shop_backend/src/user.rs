@@ -19,13 +19,13 @@ impl std::fmt::Display for UserType {
 
 #[derive(Clone, Debug)]
 pub struct User {
-    id: i32,
+    id: u32,
     name: String,
     user_type: UserType,
 }
 
 impl User {
-    pub fn logged_in(id: i32, name: &str, user_type: UserType) -> Self {
+    pub(crate) fn logged_in(id: u32, name: &str, user_type: UserType) -> Self {
         assert!(!matches!(&user_type, UserType::NotLoggedIn));
         User {
             id,
@@ -34,15 +34,15 @@ impl User {
         }
     }
 
-    pub fn not_logged_in() -> Self {
+    pub(crate) fn not_logged_in() -> Self {
         User {
-            id: -1,
+            id: 0,
             name: String::new(),
             user_type: UserType::NotLoggedIn,
         }
     }
 
-    pub fn id(&self) -> i32 {
+    pub fn id(&self) -> u32 {
         self.id
     }
 

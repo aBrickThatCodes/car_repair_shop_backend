@@ -1,11 +1,25 @@
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub struct DbError(pub String);
+pub enum DbError {
+    Client(u32),
+    Employee(u32),
+    Order(u32),
+    Report(u32),
+}
 
 impl std::fmt::Display for DbError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
+        write!(
+            f,
+            "{} does not exist",
+            match self {
+                DbError::Client(id) => format!("client {id}"),
+                DbError::Employee(id) => format!("employee {id}"),
+                DbError::Order(id) => format!("order {id}"),
+                DbError::Report(id) => format!("report {id}"),
+            }
+        )
     }
 }
 
@@ -39,8 +53,8 @@ impl std::fmt::Display for RegisterClientError {
 #[derive(Debug, Error)]
 pub enum LoginError {
     AlreadyLoggedIn,
-    EmployeeNotRegistered(i32),
-    EmployeeIncorrectPassword(i32),
+    EmployeeNotRegistered(u32),
+    EmployeeIncorrectPassword(u32),
     EmailNotRegistered(String),
     EmailIncorrectFormat(String),
     ClientIncorrectPassword(String),

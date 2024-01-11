@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use dialoguer::{console::Term, *};
 use shop_backend::*;
 
@@ -34,7 +34,7 @@ pub async fn mechanic_loop(term: &Term, backend: &mut ShopBackend, user: &User) 
             1 => change_inspection_to_repair(term, backend).await?,
             2 => close_order(term, backend).await?,
             3 => {
-                backend.log_out().await;
+                backend.log_out().await?;
                 break Ok(());
             }
             _ => unreachable!(),
@@ -65,19 +65,19 @@ async fn change_inspection_to_repair(term: &Term, backend: &ShopBackend) -> Resu
         term.write_line("Change inspection to repair")?;
         let order_id: String = Input::new()
             .with_prompt("Report ID (or nothing to go back)")
-            .default("-1".to_string())
+            .default("0".to_string())
             .interact_text_on(term)?;
-        match order_id.parse::<i32>() {
+        match order_id.parse::<u32>() {
             Ok(i) => break i,
             Err(e) => {
-                term.write_line(&format!("{e}"))?;
+                term.write_line(&format_err(&e))?;
                 wait_for_continue(term)?;
                 continue;
             }
         }
     };
 
-    if order_id == -1 {
+    if order_id == 0 {
         return Ok(());
     }
 
@@ -85,14 +85,7 @@ async fn change_inspection_to_repair(term: &Term, backend: &ShopBackend) -> Resu
         Ok(_) => term.write_line(&format!(
             "Order {order_id} changed from inspection to repair"
         ))?,
-        Err(e) => match e.downcast_ref::<DbError>() {
-            Some(DbError(s)) => {
-                term.write_line(s)?;
-                wait_for_continue(term)?;
-                return Ok(());
-            }
-            None => bail!(e),
-        },
+        Err(e) => term.write_line(&format_err(&e.source().unwrap()))?,
     }
 
     wait_for_continue(term)?;
@@ -104,32 +97,25 @@ async fn close_order(term: &Term, backend: &ShopBackend) -> Result<()> {
         term.write_line("Close order")?;
         let order_id: String = Input::new()
             .with_prompt("Order ID (or nothing to go back)")
-            .default("-1".to_string())
+            .default("0".to_string())
             .interact_text_on(term)?;
-        match order_id.parse::<i32>() {
+        match order_id.parse::<u32>() {
             Ok(i) => break i,
             Err(e) => {
-                term.write_line(&format!("{e}"))?;
+                term.write_line(&format_err(&e))?;
                 wait_for_continue(term)?;
                 continue;
             }
         }
     };
 
-    if order_id == -1 {
+    if order_id == 0 {
         return Ok(());
     }
 
     match backend.close_order(order_id).await {
         Ok(_) => term.write_line(&format!("Order {order_id} closed"))?,
-        Err(e) => match e.downcast_ref::<DbError>() {
-            Some(DbError(s)) => {
-                term.write_line(s)?;
-                wait_for_continue(term)?;
-                return Ok(());
-            }
-            None => bail!(e),
-        },
+        Err(e) => term.write_line(&format_err(&e.source().unwrap()))?,
     }
 
     wait_for_continue(term)?;

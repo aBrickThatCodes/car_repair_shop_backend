@@ -11,7 +11,9 @@ use anyhow::{bail, Result};
 use function_name::named;
 use once_cell::sync::Lazy;
 use regex::Regex;
-use sea_orm::{ActiveModelTrait, Database, DatabaseConnection, EntityTrait, Set};
+use sea_orm::{
+    ActiveModelTrait, Database, DatabaseConnection, DbBackend, EntityTrait, Set, Statement,
+};
 use sea_orm_migration::prelude::*;
 use std::env;
 
@@ -39,13 +41,42 @@ impl ShopBackend {
     }
 
     async fn connect() -> Result<DatabaseConnection> {
-        let database_path = env::var("SHOP_DATABASE_PATH").unwrap_or(String::from("./database.db"));
-        let database_url = format!("sqlite:{database_path}?mode=rwc");
-        let db = Database::connect(database_url).await?;
+        let db_url = env::var("SHOP_db_url").unwrap_or(String::from("sqlite:./shop.db?mode=rwc"));
+        let db_name = env::var("SHOP_DATABASE_NAME").unwrap_or(String::from("shop"));
+        let db = Database::connect(&db_url).await?;
 
         if matches!(db, DatabaseConnection::Disconnected) {
             bail!("database disconnected");
         }
+
+        let db = match db.get_database_backend() {
+            DbBackend::MySql => {
+                db.execute(Statement::from_string(
+                    db.get_database_backend(),
+                    format!("CREATE DATABASE IF NOT EXISTS `{}`;", db_name),
+                ))
+                .await?;
+
+                let url = format!("{}/{}", db_url, db_name);
+                Database::connect(&url).await?
+            }
+            DbBackend::Postgres => {
+                db.execute(Statement::from_string(
+                    db.get_database_backend(),
+                    format!("DROP DATABASE IF EXISTS \"{}\";", db_name),
+                ))
+                .await?;
+                db.execute(Statement::from_string(
+                    db.get_database_backend(),
+                    format!("CREATE DATABASE \"{}\";", db_name),
+                ))
+                .await?;
+
+                let url = format!("{}/{}", db_url, db_name);
+                Database::connect(&url).await?
+            }
+            DbBackend::Sqlite => db,
+        };
 
         Migrator::up(&db, None).await?;
 
@@ -67,14 +98,14 @@ impl ShopBackend {
     }
 
     #[named]
-    pub async fn register_car(&self, client_id: i32, make: &str, model: &str) -> Result<()> {
+    pub async fn register_car(&self, client_id: u32, make: &str, model: &str) -> Result<()> {
         self.login_check(function_name!())?;
 
         if matches!(self.user.user_type(), UserType::Mechanic { .. }) {
             bail!(PermissionError)
         }
 
-        match db_entities::prelude::Client::find_by_id(client_id)
+        match db_entities::prelude::Client::find_by_id(client_id as i32)
             .one(&self.db)
             .await?
         {
@@ -90,7 +121,7 @@ impl ShopBackend {
                     Ok(())
                 }
             },
-            None => bail!(DbError(format!("client {client_id} does not exist"))),
+            None => bail!(DbError::Client(client_id)),
         }
     }
 }
