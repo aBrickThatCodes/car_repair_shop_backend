@@ -3,7 +3,7 @@
 use sea_orm::entity::prelude::*;
 use serde::Serialize;
 
-#[derive(Clone, PartialEq, DeriveEntityModel, Eq, Serialize)]
+#[derive(Clone, PartialEq, Debug, DeriveEntityModel, Eq, Serialize)]
 #[sea_orm(table_name = "report")]
 pub struct Model {
     #[sea_orm(primary_key)]
@@ -13,16 +13,14 @@ pub struct Model {
     pub cost: i32,
 }
 
-impl std::fmt::Debug for Model {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Model")
-            .field("id", &self.id)
-            .field("order_id", &self.order_id)
-            .field(
-                "cost",
-                &format!("{}.{} PLN", self.cost / 100, self.cost % 100),
-            )
-            .finish()
+impl From<Model> for crate::Report {
+    fn from(value: Model) -> Self {
+        crate::Report::new(
+            value.id as u32,
+            value.client_id as u32,
+            value.order_id as u32,
+            value.cost as u32,
+        )
     }
 }
 

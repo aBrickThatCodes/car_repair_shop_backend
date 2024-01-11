@@ -1,8 +1,4 @@
-use crate::{
-    entities::prelude::Order,
-    entities::{order, prelude::*},
-    UserType, *,
-};
+use crate::{db_entities::order, UserType, *};
 
 use anyhow::{bail, Result};
 use function_name::named;
@@ -16,7 +12,10 @@ impl ShopBackend {
             bail!(PermissionError);
         }
 
-        let Some(client) = Client::find_by_id(client_id).one(&self.db).await? else {
+        let Some(client) = db_entities::prelude::Client::find_by_id(client_id)
+            .one(&self.db)
+            .await?
+        else {
             bail!(DbError(format!("client {client_id} does not exist")));
         };
 
@@ -37,7 +36,7 @@ impl ShopBackend {
     pub async fn get_unfinished_orders(&self) -> Result<Vec<String>> {
         match self.user.user_type() {
             UserType::Mechanic => {
-                let orders = Order::find()
+                let orders = db_entities::prelude::Order::find()
                     .filter(order::Column::Finished.eq(false))
                     .all(&self.db)
                     .await?;
@@ -50,17 +49,14 @@ impl ShopBackend {
         }
     }
 
-    pub async fn get_finished_orders(&self) -> Result<Vec<String>> {
+    pub async fn get_finished_orders(&self) -> Result<Vec<Order>> {
         match self.user.user_type() {
             UserType::Technician => {
-                let orders = Order::find()
+                let orders = db_entities::prelude::Order::find()
                     .filter(order::Column::Finished.eq(true))
                     .all(&self.db)
                     .await?;
-                Ok(orders
-                    .iter()
-                    .map(|m| serde_json::to_string(m).unwrap())
-                    .collect())
+                Ok(orders.into_iter().map(|m| m.into()).collect())
             }
             _ => bail!(PermissionError),
         }
@@ -70,7 +66,10 @@ impl ShopBackend {
     pub async fn change_inspection_to_repair(&self, order_id: i32) -> Result<()> {
         self.login_check(function_name!())?;
         if let UserType::Mechanic = self.user.user_type() {
-            match Order::find_by_id(order_id).one(&self.db).await? {
+            match db_entities::prelude::Order::find_by_id(order_id)
+                .one(&self.db)
+                .await?
+            {
                 Some(order) => match &order.service {
                     order::Service::Inspection => {
                         let mut order: order::ActiveModel = order.into();
@@ -91,7 +90,10 @@ impl ShopBackend {
     pub async fn close_order(&self, order_id: i32) -> Result<()> {
         self.login_check(function_name!())?;
         if let UserType::Mechanic = self.user.user_type() {
-            match Order::find_by_id(order_id).one(&self.db).await? {
+            match db_entities::prelude::Order::find_by_id(order_id)
+                .one(&self.db)
+                .await?
+            {
                 Some(order) => {
                     let mut order: order::ActiveModel = order.into();
                     order.finished = Set(true);

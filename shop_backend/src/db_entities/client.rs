@@ -3,7 +3,7 @@
 use sea_orm::{entity::prelude::*, FromJsonQueryResult};
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "client")]
 pub struct Model {
     #[sea_orm(primary_key)]
@@ -12,6 +12,12 @@ pub struct Model {
     pub email: String,
     pub password_hash: String,
     pub car: Option<Car>,
+}
+
+impl From<Model> for crate::Client {
+    fn from(val: Model) -> Self {
+        crate::Client::new(val.id as u32, &val.name, &val.email, val.car)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, FromJsonQueryResult)]

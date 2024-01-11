@@ -139,7 +139,7 @@ async fn list_finished_orders(term: &Term, backend: &ShopBackend) -> Result<()> 
     }
 
     for order in orders {
-        term.write_line(&order)?;
+        term.write_line(&format!("{order}"))?;
     }
     wait_for_continue(term)?;
 

@@ -8,7 +8,7 @@ pub struct Migration;
 pub enum Employee {
     Table,
     Id,
-    Password,
+    PasswordHash,
     Name,
     Role,
 }
@@ -37,7 +37,7 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(Employee::Password).string().not_null())
+                    .col(ColumnDef::new(Employee::PasswordHash).string().not_null())
                     .col(ColumnDef::new(Employee::Name).string().not_null())
                     .col(
                         ColumnDef::new(Employee::Role)

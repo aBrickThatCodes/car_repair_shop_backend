@@ -1,6 +1,6 @@
-use super::common::HASH_REGEX;
+use super::HASH_REGEX;
 
-use crate::entities::{employee, prelude::*};
+use crate::db_entities::employee;
 use crate::UserType;
 use crate::*;
 
@@ -17,9 +17,12 @@ impl ShopBackend {
             bail!(LoginError::PasswordNotHashed)
         }
 
-        match Employee::find_by_id(id).one(&self.db).await? {
+        match db_entities::prelude::Employee::find_by_id(id)
+            .one(&self.db)
+            .await?
+        {
             Some(employee) => {
-                if employee.password != *password_hash {
+                if employee.password_hash != *password_hash {
                     bail!(LoginError::EmployeeIncorrectPassword(id));
                 }
 

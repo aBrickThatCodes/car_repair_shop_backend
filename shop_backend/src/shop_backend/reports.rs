@@ -1,5 +1,5 @@
-use crate::entities::prelude::Order;
-use crate::entities::report;
+use crate::db_entities::prelude::Order;
+use crate::db_entities::report;
 use crate::UserType;
 use crate::{DbError, ShopBackend};
 
