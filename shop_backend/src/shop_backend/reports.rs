@@ -1,9 +1,7 @@
-use super::ShopBackend;
-
 use crate::entities::prelude::Order;
 use crate::entities::report;
-use crate::DbError;
 use crate::UserType;
+use crate::{DbError, ShopBackend};
 
 use anyhow::{bail, Result};
 use function_name::named;

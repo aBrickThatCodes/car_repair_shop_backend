@@ -14,6 +14,7 @@ pub enum RegisterClientError {
     EmailAlreadyRegistered(String),
     EmailIncorrectFormat(String),
     PasswordNotHashed,
+    AlreadyLoggedIn,
 }
 
 impl std::fmt::Display for RegisterClientError {
@@ -28,12 +29,16 @@ impl std::fmt::Display for RegisterClientError {
             RegisterClientError::PasswordNotHashed => {
                 f.write_str("password hash not a bcrypt hash")
             }
+            RegisterClientError::AlreadyLoggedIn => {
+                f.write_str("cannot register a client if already logged in")
+            }
         }
     }
 }
 
 #[derive(Debug, Error)]
 pub enum LoginError {
+    AlreadyLoggedIn,
     EmployeeNotRegistered(i32),
     EmployeeIncorrectPassword(i32),
     EmailNotRegistered(String),
@@ -59,6 +64,7 @@ impl std::fmt::Display for LoginError {
             LoginError::EmployeeIncorrectPassword(id) => {
                 write!(f, "incorrect password for employee {id}")
             }
+            LoginError::AlreadyLoggedIn => f.write_str("already logged in"),
         }
     }
 }
@@ -69,20 +75,5 @@ pub struct PermissionError;
 impl std::fmt::Display for PermissionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("permission denied")
-    }
-}
-
-#[derive(Debug, Error)]
-pub struct NotLoggedInError(String);
-
-impl NotLoggedInError {
-    pub fn new(msg: &str) -> Self {
-        NotLoggedInError(msg.to_string())
-    }
-}
-
-impl std::fmt::Display for NotLoggedInError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} requires being logged in", self.0)
     }
 }

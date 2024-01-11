@@ -42,7 +42,7 @@ async fn login_screen(term: &Term, backend: &mut ShopBackend) -> Result<User> {
         term.write_line("Login")?;
 
         let id: String = input(term, "ID")?;
-        let password = Password::new().with_prompt("Password").interact_on(term)?;
+        let mut password = Password::new().with_prompt("Password").interact_on(term)?;
 
         let id = match id.parse::<i32>() {
             Ok(i) => i,
@@ -52,7 +52,7 @@ async fn login_screen(term: &Term, backend: &mut ShopBackend) -> Result<User> {
             }
         };
 
-        let user = backend.employee_login(id, &password).await;
+        let user = backend.employee_login(id, &mut password).await;
 
         term.clear_screen()?;
         match user {

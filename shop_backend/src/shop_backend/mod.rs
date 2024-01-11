@@ -1,17 +1,15 @@
 mod clients;
 mod common;
+mod employee;
 mod orders;
 mod reports;
 
-use super::entities::{employee, prelude::*};
-use super::error::*;
 use super::migrator::Migrator;
 use super::user::*;
-use common::*;
 
 use anyhow::{bail, Result};
 use function_name::named;
-use sea_orm::{Database, DatabaseConnection, EntityTrait};
+use sea_orm::{Database, DatabaseConnection};
 use sea_orm_migration::prelude::*;
 use std::env;
 
@@ -51,37 +49,5 @@ impl ShopBackend {
         self.login_check(function_name!())?;
         self.user = User::not_logged_in();
         Ok(self.user.clone())
-    }
-
-    pub async fn employee_login(&mut self, id: i32, password_hash: &str) -> Result<User> {
-        assert!(
-            matches!(self.user.user_type(), UserType::NotLoggedIn),
-            "already logged in"
-        );
-
-        if !HASH_REGEX.is_match(password_hash) {
-            bail!(LoginError::PasswordNotHashed)
-        }
-
-        match Employee::find_by_id(id).one(&self.db).await? {
-            Some(employee) => {
-                if employee.password != *password_hash {
-                    bail!(LoginError::EmployeeIncorrectPassword(id));
-                }
-
-                match employee.role {
-                    employee::Role::Technician => {
-                        self.user =
-                            User::logged_in(employee.id, &employee.name, UserType::Technician)
-                    }
-                    employee::Role::Mechanic => {
-                        self.user = User::logged_in(employee.id, &employee.name, UserType::Mechanic)
-                    }
-                }
-
-                Ok(self.user.clone())
-            }
-            None => bail!(LoginError::EmployeeNotRegistered(id)),
-        }
     }
 }
