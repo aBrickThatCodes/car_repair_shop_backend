@@ -10,13 +10,9 @@ use sea_orm::ColumnTrait;
 use sea_orm::QueryFilter;
 use sea_orm::{ActiveModelTrait, EntityTrait, ModelTrait, Set};
 use sea_orm_migration::prelude::*;
-use zeroize::{Zeroize, Zeroizing};
 
 impl ShopBackend {
-    pub async fn client_login(&mut self, email: &str, password_hash: &mut str) -> Result<User> {
-        let password_hash_zeroing = Zeroizing::new(password_hash.to_string());
-        password_hash.zeroize();
-
+    pub async fn client_login(&mut self, email: &str, password_hash: &str) -> Result<User> {
         if !matches!(self.user.user_type(), UserType::NotLoggedIn) {
             bail!(LoginError::AlreadyLoggedIn);
         };
@@ -26,23 +22,18 @@ impl ShopBackend {
             .one(&self.db)
             .await?
         {
-            Some(mut client) => {
+            Some(client) => {
                 if !EMAIL_REGEX.is_match(email) {
-                    client.password_hash.zeroize();
                     bail!(LoginError::EmailIncorrectFormat(email.to_owned()));
                 }
 
-                if !HASH_REGEX.is_match(&password_hash_zeroing) {
-                    client.password_hash.zeroize();
+                if !HASH_REGEX.is_match(password_hash) {
                     bail!(LoginError::PasswordNotHashed)
                 }
 
-                if client.password_hash != *password_hash_zeroing {
-                    client.password_hash.zeroize();
+                if client.password_hash != *password_hash {
                     bail!(LoginError::ClientIncorrectPassword(email.to_string()));
                 }
-
-                client.password_hash.zeroize();
 
                 self.user = User::logged_in(client.id, &client.name, UserType::Client);
                 Ok(self.user.clone())
@@ -57,11 +48,8 @@ impl ShopBackend {
         &mut self,
         name: &str,
         email: &str,
-        password_hash: &mut str,
+        password_hash: &str,
     ) -> Result<User> {
-        let password_hash_zeroing = Zeroizing::new(password_hash.to_string());
-        password_hash.zeroize();
-
         if !matches!(self.user.user_type(), UserType::NotLoggedIn) {
             bail!(RegisterClientError::AlreadyLoggedIn);
         }
@@ -75,8 +63,7 @@ impl ShopBackend {
             .one(&self.db)
             .await?
         {
-            Some(mut client) => {
-                client.password_hash.zeroize();
+            Some(_) => {
                 bail!(RegisterClientError::EmailAlreadyRegistered(
                     email.to_owned()
                 ))
@@ -85,7 +72,7 @@ impl ShopBackend {
                 let client = client::ActiveModel {
                     name: Set(name.to_owned()),
                     email: Set(email.to_owned()),
-                    password_hash: Set(password_hash_zeroing.to_string()),
+                    password_hash: Set(password_hash.to_string()),
                     ..Default::default()
                 };
                 let res = client.insert(&self.db).await?;
@@ -100,13 +87,10 @@ impl ShopBackend {
         self.login_check(function_name!())?;
 
         match Client::find_by_id(client_id).one(&self.db).await? {
-            Some(mut client) => {
-                client.password_hash.zeroize();
-                Ok(client
-                    .car
-                    .clone()
-                    .map(|car| serde_json::to_string(&car).unwrap()))
-            }
+            Some(client) => Ok(client
+                .car
+                .clone()
+                .map(|car| serde_json::to_string(&car).unwrap())),
             None => unreachable!(),
         }
     }
@@ -116,11 +100,10 @@ impl ShopBackend {
         self.login_check(function_name!())?;
         match self.user.user_type() {
             UserType::Client => {
-                let mut client = Client::find_by_id(self.user.id())
+                let client = Client::find_by_id(self.user.id())
                     .one(&self.db)
                     .await?
                     .unwrap();
-                client.password_hash.zeroize();
                 let orders = client.find_related(Order).all(&self.db).await?;
                 Ok(orders
                     .iter()
@@ -136,11 +119,10 @@ impl ShopBackend {
         self.login_check(function_name!())?;
         match self.user.user_type() {
             UserType::Client => {
-                let mut client = Client::find_by_id(self.user.id())
+                let client = Client::find_by_id(self.user.id())
                     .one(&self.db)
                     .await?
                     .unwrap();
-                client.password_hash.zeroize();
                 let reps = client.find_related(Report).all(&self.db).await?;
                 Ok(reps
                     .iter()

@@ -6,24 +6,20 @@ use crate::*;
 
 use anyhow::{bail, Result};
 use sea_orm::EntityTrait;
-use zeroize::{Zeroize, Zeroizing};
 
 impl ShopBackend {
-    pub async fn employee_login(&mut self, id: i32, password_hash: &mut str) -> Result<User> {
-        let password_hash_zeroing = Zeroizing::new(password_hash.to_string());
-        password_hash.zeroize();
-
+    pub async fn employee_login(&mut self, id: i32, password_hash: &str) -> Result<User> {
         if !matches!(self.user.user_type(), UserType::NotLoggedIn) {
             bail!(LoginError::AlreadyLoggedIn);
         };
 
-        if !HASH_REGEX.is_match(&password_hash_zeroing) {
+        if !HASH_REGEX.is_match(password_hash) {
             bail!(LoginError::PasswordNotHashed)
         }
 
         match Employee::find_by_id(id).one(&self.db).await? {
             Some(employee) => {
-                if employee.password != *password_hash_zeroing {
+                if employee.password != *password_hash {
                     bail!(LoginError::EmployeeIncorrectPassword(id));
                 }
 

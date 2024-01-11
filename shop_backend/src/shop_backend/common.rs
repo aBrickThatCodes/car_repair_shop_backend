@@ -9,7 +9,6 @@ use function_name::named;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use sea_orm::{ActiveModelTrait, EntityTrait, Set};
-use zeroize::Zeroize;
 
 pub static EMAIL_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^[\w\-\.]+@([\w-]+\.)+[\w-]{2,}$").unwrap());
@@ -34,11 +33,8 @@ impl ShopBackend {
         }
 
         match Client::find_by_id(client_id).one(&self.db).await? {
-            Some(mut client) => match &client.car {
-                Some(_) => {
-                    client.password_hash.zeroize();
-                    bail!("client already has a car registered")
-                }
+            Some(client) => match &client.car {
+                Some(_) => bail!("client already has a car registered"),
                 None => {
                     let mut client_active: client::ActiveModel = client.into();
                     client_active.car = Set(Some(Car {
