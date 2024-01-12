@@ -3,9 +3,9 @@ mod technician;
 
 use anyhow::Result;
 use bcrypt::DEFAULT_COST;
+use car_repair_shop_backend::*;
 use console::Term;
 use dialoguer::*;
-use shop_backend::*;
 use zeroize::Zeroizing;
 
 use crate::common::*;
