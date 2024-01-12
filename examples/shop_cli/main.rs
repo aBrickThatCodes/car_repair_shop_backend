@@ -1,10 +1,15 @@
+mod client;
+mod common;
+mod employee;
+
 use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
 use dialoguer::console::Term;
 
-use shop_backend::ShopBackend;
+use car_repair_shop_backend::ShopBackend;
 
-use shop_cli::{client::client_loop, employee::employee_loop};
+use client::client_loop;
+use employee::employee_loop;
 
 #[derive(Parser)]
 #[command(author, about, long_about = None)]

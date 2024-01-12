@@ -32,6 +32,12 @@ impl ShopBackend {
     /// If SHOP_DATABASE_PATH environment variable exists, backend will use that database,
     /// otherwise ./database.db is used
     pub async fn init() -> Result<Self> {
+        if let Err(e) = dotenvy::dotenv() {
+            if !e.not_found() {
+                bail!(e);
+            }
+        }
+
         let db = Self::connect().await?;
 
         Ok(ShopBackend {

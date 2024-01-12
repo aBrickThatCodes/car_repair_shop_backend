@@ -1,6 +1,6 @@
 use anyhow::Result;
+use car_repair_shop_backend::*;
 use dialoguer::{console::Term, *};
-use shop_backend::*;
 
 use crate::common::*;
 
