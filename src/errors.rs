@@ -1,93 +1,68 @@
+use sea_orm::DbErr;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum DbError {
-    Client(u32),
-    Employee(u32),
-    Order(u32),
-    Report(u32),
+pub enum InitError {
+    #[error("problem reading .env file")]
+    Dotenv(#[from] dotenvy::Error),
+    #[error("database  error")]
+    Database(#[from] DbErr),
 }
 
-impl std::fmt::Display for DbError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} does not exist",
-            match self {
-                DbError::Client(id) => format!("client {id}"),
-                DbError::Employee(id) => format!("employee {id}"),
-                DbError::Order(id) => format!("order {id}"),
-                DbError::Report(id) => format!("report {id}"),
-            }
-        )
-    }
+#[derive(Debug, Error)]
+pub enum DbError {
+    #[error("client {0} does not exist")]
+    Client(u32),
+    #[error("employee {0} does not exist")]
+    Employee(u32),
+    #[error("order {0} does not exist")]
+    Order(u32),
+    #[error("report {0} does not exist")]
+    Report(u32),
+    #[error("permission denied")]
+    Permission,
+    #[error("{0}")]
+    NotLoggedIn(#[from] NotLoggedInError),
+    #[error("database error: {0}")]
+    Database(#[from] DbErr),
+    #[error("{0}")]
+    Other(String),
 }
 
 #[derive(Debug, Error)]
 pub enum RegisterClientError {
-    EmailAlreadyRegistered(String),
-    EmailIncorrectFormat(String),
-    PasswordNotHashed,
+    #[error("already logged in")]
     AlreadyLoggedIn,
-}
-
-impl std::fmt::Display for RegisterClientError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            RegisterClientError::EmailAlreadyRegistered(email) => {
-                write!(f, "email {email} already registered")
-            }
-            RegisterClientError::EmailIncorrectFormat(email) => {
-                write!(f, "{email} is not a correct email address")
-            }
-            RegisterClientError::PasswordNotHashed => {
-                f.write_str("password hash not a bcrypt hash")
-            }
-            RegisterClientError::AlreadyLoggedIn => {
-                f.write_str("cannot register a client if already logged in")
-            }
-        }
-    }
+    #[error("email {0} already registered")]
+    EmailAlreadyRegistered(String),
+    #[error("{0} is not a correct email address")]
+    EmailIncorrectFormat(String),
+    #[error("password hash is not a bcrypt hash")]
+    PasswordNotHashed,
+    #[error("database error: {0}")]
+    Database(#[from] DbErr),
 }
 
 #[derive(Debug, Error)]
 pub enum LoginError {
+    #[error("already logged in")]
     AlreadyLoggedIn,
+    #[error("no employee with ID {0}")]
     EmployeeNotRegistered(u32),
+    #[error("incorrect password for employee {0}")]
     EmployeeIncorrectPassword(u32),
+    #[error("no user with email {0}")]
     EmailNotRegistered(String),
+    #[error("{0} is not a correct email address")]
     EmailIncorrectFormat(String),
+    #[error("incorrect password for {0}")]
     ClientIncorrectPassword(String),
+    #[error("password hash is not a bcrypt hash")]
     PasswordNotHashed,
-}
-
-impl std::fmt::Display for LoginError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LoginError::EmployeeNotRegistered(id) => write!(f, "no employee with ID {id}"),
-            LoginError::EmailNotRegistered(email) => {
-                write!(f, "no user with email {email}")
-            }
-            LoginError::EmailIncorrectFormat(email) => {
-                write!(f, "{email} is not a correct email address")
-            }
-            LoginError::PasswordNotHashed => f.write_str("password hash is not a bcrypt hash"),
-            LoginError::ClientIncorrectPassword(email) => {
-                write!(f, "incorrect password for {email}")
-            }
-            LoginError::EmployeeIncorrectPassword(id) => {
-                write!(f, "incorrect password for employee {id}")
-            }
-            LoginError::AlreadyLoggedIn => f.write_str("already logged in"),
-        }
-    }
+    #[error("database error: {0}")]
+    Database(#[from] DbErr),
 }
 
 #[derive(Debug, Error)]
-pub struct PermissionError;
-
-impl std::fmt::Display for PermissionError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("permission denied")
-    }
-}
+#[error("function {0} requires being logged in")]
+pub struct NotLoggedInError(pub String);

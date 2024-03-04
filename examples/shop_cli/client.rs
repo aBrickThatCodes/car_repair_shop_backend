@@ -43,11 +43,10 @@ pub async fn client_loop(term: &Term, mut backend: ShopBackend) -> Result<()> {
                 2 => list_orders(term, &backend).await?,
                 3 => list_reports(term, &backend).await?,
                 4 => print_summary(term, &backend).await?,
-                5 => {
+                _ => {
                     backend.log_out().await?;
                     break;
                 }
-                _ => unreachable!(),
             }
         }
     }
@@ -114,7 +113,7 @@ async fn register_car(
             let model: String = input(term, "Model")?;
             match backend.register_car(client_id, &make, &model).await {
                 Ok(_) => term.write_line(&format!("{make} {model} registered"))?,
-                Err(e) => term.write_line(&format_err(&e.source().unwrap()))?,
+                Err(e) => term.write_line(&format_err(&e))?,
             }
         }
     }
@@ -222,7 +221,7 @@ async fn print_summary(term: &Term, backend: &ShopBackend) -> Result<()> {
 
     match backend.get_report(report_id).await {
         Ok(report) => term.write_line(&format!("{report}"))?,
-        Err(e) => term.write_line(&format_err(&e.source().unwrap()))?,
+        Err(e) => term.write_line(&format_err(&e))?,
     };
     wait_for_continue(term)?;
     Ok(())

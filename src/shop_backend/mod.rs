@@ -7,7 +7,6 @@ use super::db_entities::client::{self, Car};
 use super::migrator::Migrator;
 use super::{user::*, *};
 
-use anyhow::{bail, Result};
 use function_name::named;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -31,10 +30,10 @@ pub struct ShopBackend {
 impl ShopBackend {
     /// If SHOP_DATABASE_PATH environment variable exists, backend will use that database,
     /// otherwise ./database.db is used
-    pub async fn init() -> Result<Self> {
+    pub async fn init() -> Result<Self, InitError> {
         if let Err(e) = dotenvy::dotenv() {
             if !e.not_found() {
-                bail!(e);
+                return Err(e.into());
             }
         }
 
@@ -46,14 +45,10 @@ impl ShopBackend {
         })
     }
 
-    async fn connect() -> Result<DatabaseConnection> {
+    async fn connect() -> Result<DatabaseConnection, DbErr> {
         let db_url = env::var("SHOP_db_url").unwrap_or(String::from("sqlite:./shop.db?mode=rwc"));
         let db_name = env::var("SHOP_DATABASE_NAME").unwrap_or(String::from("shop"));
         let db = Database::connect(&db_url).await?;
-
-        if matches!(db, DatabaseConnection::Disconnected) {
-            bail!("database disconnected");
-        }
 
         let db = match db.get_database_backend() {
             DbBackend::MySql => {
@@ -90,25 +85,31 @@ impl ShopBackend {
     }
 
     #[named]
-    pub async fn log_out(&mut self) -> Result<User> {
+    pub async fn log_out(&mut self) -> Result<User, NotLoggedInError> {
         self.login_check(function_name!())?;
         self.user = User::not_logged_in();
         Ok(self.user.clone())
     }
 
-    pub fn login_check(&self, func_name: &str) -> Result<()> {
+    pub fn login_check(&self, func_name: &str) -> Result<(), NotLoggedInError> {
         if matches!(self.user.user_type(), UserType::NotLoggedIn) {
-            func_name.to_string();
+            Err(NotLoggedInError(func_name.to_string()))
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 
     #[named]
-    pub async fn register_car(&self, client_id: u32, make: &str, model: &str) -> Result<()> {
+    pub async fn register_car(
+        &self,
+        client_id: u32,
+        make: &str,
+        model: &str,
+    ) -> Result<(), DbError> {
         self.login_check(function_name!())?;
 
         if matches!(self.user.user_type(), UserType::Mechanic { .. }) {
-            bail!(PermissionError)
+            return Err(DbError::Permission);
         }
 
         match db_entities::prelude::Client::find_by_id(client_id as i32)
@@ -116,7 +117,9 @@ impl ShopBackend {
             .await?
         {
             Some(client) => match &client.car {
-                Some(_) => bail!("client already has a car registered"),
+                Some(_) => Err(DbError::Other(String::from(
+                    "client already has a car registered",
+                ))),
                 None => {
                     let mut client_active: client::ActiveModel = client.into();
                     client_active.car = Set(Some(Car {
@@ -127,7 +130,7 @@ impl ShopBackend {
                     Ok(())
                 }
             },
-            None => bail!(DbError::Client(client_id)),
+            None => Err(DbError::Client(client_id)),
         }
     }
 }

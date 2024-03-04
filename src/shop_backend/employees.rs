@@ -4,17 +4,20 @@ use crate::db_entities::employee;
 use crate::UserType;
 use crate::*;
 
-use anyhow::{bail, Result};
 use sea_orm::EntityTrait;
 
 impl ShopBackend {
-    pub async fn employee_login(&mut self, id: u32, password_hash: &str) -> Result<User> {
+    pub async fn employee_login(
+        &mut self,
+        id: u32,
+        password_hash: &str,
+    ) -> Result<User, LoginError> {
         if !matches!(self.user.user_type(), UserType::NotLoggedIn) {
-            bail!(LoginError::AlreadyLoggedIn);
+            return Err(LoginError::AlreadyLoggedIn);
         };
 
         if !HASH_REGEX.is_match(password_hash) {
-            bail!(LoginError::PasswordNotHashed)
+            return Err(LoginError::PasswordNotHashed);
         }
 
         match db_entities::prelude::Employee::find_by_id(id as i32)
@@ -23,7 +26,7 @@ impl ShopBackend {
         {
             Some(employee) => {
                 if employee.password_hash != *password_hash {
-                    bail!(LoginError::EmployeeIncorrectPassword(id));
+                    return Err(LoginError::EmployeeIncorrectPassword(id));
                 }
 
                 match employee.role {
@@ -37,7 +40,7 @@ impl ShopBackend {
 
                 Ok(self.user.clone())
             }
-            None => bail!(LoginError::EmployeeNotRegistered(id)),
+            None => Err(LoginError::EmployeeNotRegistered(id)),
         }
     }
 }
