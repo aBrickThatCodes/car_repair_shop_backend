@@ -71,7 +71,7 @@ async fn register_car(term: &Term, backend: &ShopBackend) -> Result<()> {
 
     match backend.register_car(client_id, &make, &model).await {
         Ok(_) => term.write_line(&format!("{make} {model} registered to client {client_id}"))?,
-        Err(e) => term.write_line(&format_err(&e.source().unwrap()))?,
+        Err(e) => term.write_line(&format_err(&e))?,
     }
 
     wait_for_continue(term)?;
@@ -122,7 +122,7 @@ async fn register_order(term: &Term, backend: &ShopBackend) -> Result<()> {
             ))?;
             wait_for_continue(term)?;
         }
-        Err(e) => term.write_line(&format_err(&e.source().unwrap()))?,
+        Err(e) => term.write_line(&format_err(&e))?,
     }
 
     Ok(())
@@ -183,7 +183,7 @@ async fn register_report(term: &Term, backend: &ShopBackend) -> Result<()> {
         Ok(_) => {
             term.write_line(&format!("Report on {order_id} has been registered"))?;
         }
-        Err(e) => term.write_line(&format_err(&e.source().unwrap()))?,
+        Err(e) => term.write_line(&format_err(&e))?,
     }
     wait_for_continue(term)?;
 

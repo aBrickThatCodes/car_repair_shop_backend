@@ -81,8 +81,14 @@ async fn login_screen(term: &Term, backend: &mut ShopBackend) -> Result<User> {
         let password_hash = bcrypt::hash(password, DEFAULT_COST)?;
 
         let user = match choice {
-            0 => backend.client_login(&email, &password_hash).await,
-            1 => backend.register_client(&name, &email, &password_hash).await,
+            0 => match backend.client_login(&email, &password_hash).await {
+                Ok(u) => Ok(u),
+                Err(e) => Err(anyhow::Error::from(e)),
+            },
+            1 => match backend.register_client(&name, &email, &password_hash).await {
+                Ok(_) => todo!(),
+                Err(e) => Err(anyhow::Error::from(e)),
+            },
             _ => unreachable!(),
         };
 

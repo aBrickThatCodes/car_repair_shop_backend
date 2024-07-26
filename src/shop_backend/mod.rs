@@ -8,19 +8,20 @@ use super::migrator::Migrator;
 use super::{user::*, *};
 
 use function_name::named;
-use once_cell::sync::Lazy;
 use regex::Regex;
 use sea_orm::{
     ActiveModelTrait, Database, DatabaseConnection, DbBackend, EntityTrait, Set, Statement,
 };
 use sea_orm_migration::prelude::*;
+
 use std::env;
+use std::sync::LazyLock;
 
-pub static EMAIL_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^[\w\-\.]+@([\w-]+\.)+[\w-]{2,}$").unwrap());
+pub static EMAIL_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[\w\-\.]+@([\w-]+\.)+[\w-]{2,}$").unwrap());
 
-pub static HASH_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^\$2[aby]?\$\d{1,2}\$[./A-Za-z0-9]{53}$").unwrap());
+pub static HASH_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\$2[aby]?\$\d{1,2}\$[./A-Za-z0-9]{53}$").unwrap());
 
 pub struct ShopBackend {
     db: DatabaseConnection,
@@ -46,7 +47,7 @@ impl ShopBackend {
     }
 
     async fn connect() -> Result<DatabaseConnection, DbErr> {
-        let db_url = env::var("SHOP_db_url").unwrap_or(String::from("sqlite:./shop.db?mode=rwc"));
+        let db_url = env::var("SHOP_DB_URL").unwrap_or(String::from("sqlite:./shop.db?mode=rwc"));
         let db_name = env::var("SHOP_DATABASE_NAME").unwrap_or(String::from("shop"));
         let db = Database::connect(&db_url).await?;
 

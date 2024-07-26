@@ -85,7 +85,7 @@ async fn change_inspection_to_repair(term: &Term, backend: &ShopBackend) -> Resu
         Ok(_) => term.write_line(&format!(
             "Order {order_id} changed from inspection to repair"
         ))?,
-        Err(e) => term.write_line(&format_err(&e.source().unwrap()))?,
+        Err(e) => term.write_line(&format_err(&e))?,
     }
 
     wait_for_continue(term)?;
@@ -115,7 +115,7 @@ async fn close_order(term: &Term, backend: &ShopBackend) -> Result<()> {
 
     match backend.close_order(order_id).await {
         Ok(_) => term.write_line(&format!("Order {order_id} closed"))?,
-        Err(e) => term.write_line(&format_err(&e.source().unwrap()))?,
+        Err(e) => term.write_line(&format_err(&e))?,
     }
 
     wait_for_continue(term)?;
